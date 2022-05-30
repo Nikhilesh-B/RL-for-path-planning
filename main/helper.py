@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from rl import OBSTACLES
+
 
 """
 Class for an n-link arm
@@ -104,12 +106,12 @@ def closest_euclidean(q, qp):
 Plotting and visualization functions
 """
 
-def get_occupancy_grid(arm, M):
+def get_occupancy_grid(arm, M, OBSTACLES):
     grid = [[0 for _ in range(M)] for _ in range(M)]
     theta_list = [2 * i * np.pi / M for i in range(-M // 2, M // 2 + 1)]
     for i in range(M):
         for j in range(M):
-            grid[i][j] = int(detect_collision(arm, [theta_list[i], theta_list[j]]))
+            grid[i][j] = int(detect_collision(arm, [theta_list[i], theta_list[j]], OBSTACLES))
     return np.array(grid)
 
 def plot_roadmap(ax, roadmap):
@@ -131,11 +133,11 @@ def plot_arm(plt, ax, arm, OBSTACLES):
             ax.plot([arm.points[i][0], arm.points[i + 1][0]], [arm.points[i][1], arm.points[i + 1][1]], 'r-')
         ax.plot(arm.points[i][0], arm.points[i][1], 'k.')
 
-def visualize_spaces(arm, START):
+def visualize_spaces(arm, START, OBSTACLES):
     plt.subplots(1, 2)
 
     plt.subplot(1, 2, 1)
-    grid = get_occupancy_grid(arm, 200)
+    grid = get_occupancy_grid(arm, 200, OBSTACLES)
     plt.imshow(np.flip(grid.T, axis=0))
     plt.xticks([0,50,100,150,200], ["-\u03C0", "-\u03C0/2", "0", "\u03C0/2", "\u03C0"])
     plt.yticks([0,50,100,150,200], ["\u03C0", "\u03C0/2", "0", "-\u03C0/2", "-\u03C0"])
@@ -154,7 +156,7 @@ def visualize_spaces(arm, START):
     plt.ylim(-3.0, 3.0)
     plt.show()
 
-def animate(arm, roadmap, route, START):
+def animate(arm, roadmap, route, START, OBSTACLES):
     ax1 = plt.subplot(1, 2, 1)
     plot_roadmap(ax1, roadmap)
     if route:
@@ -185,7 +187,7 @@ def animate(arm, roadmap, route, START):
         arm.update_joints([config[0], config[1]])
         ax1.plot(config[0], config[1], "xr")
         ax2.lines = []
-        plot_arm(plt, ax2, arm)
+        plot_arm(plt, ax2, arm, OBSTACLES)
         # Uncomment here to save the sequence of frames
         # plt.savefig('frame{:04d}.png'.format(i))
         plt.pause(0.3)
