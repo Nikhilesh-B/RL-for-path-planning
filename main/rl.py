@@ -1,8 +1,12 @@
-from helper import NLinkArm, visualize_spaces, animate, find_qnew, find_qnew_greedy, clear_path
+from nlinkarm import NLinkArm
+from helper import visualize_spaces, animate, find_qnew, find_qnew_greedy, clear_path
 import numpy as np
+from pprint import pprint 
 
 
-OBSTACLES = [[1.75, 0.75, 0.6], [-.5, 1.5, 0.5], [0, -1, 0.7]] 
+OBSTACLES = [[1.75, 0.75, 0.6], 
+             [-.5, 1.5, 0.5], 
+             [0, -1, 0.7]] 
 START = (1.0, 0.0)    
 GOAL = (1.0, 0.5)    
 
@@ -16,9 +20,15 @@ EDGE_INC = 0.05
 
 def main():
     ARM = NLinkArm(LINK_LENGTH, [0,0])
-    visualize_spaces(ARM)
+    visualize_spaces(ARM, START, OBSTACLES)
 
     roadmap, route = construct_tree(ARM)
+
+    print("Roadmap")
+    pprint(roadmap)
+    print("Route")
+    pprint(route)
+
     if not route:
         print("No route found")
 
@@ -63,6 +73,9 @@ def construct_tree(arm):
         
         path = path[::-1]
     
-    print(len(tree))
-    print(path)
     return tree, path
+
+
+
+if __name__ == "__main__":
+    main()
