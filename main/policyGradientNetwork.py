@@ -27,6 +27,9 @@ class policyGradientNetwork(keras.Model):
         mu = self.network.predict(action)
 
         dist = multivariate_normal(mean=mu,cov=np.eye(2))
+        prob = dist.pdf(action)
+        
+
 
 
         return 

@@ -37,8 +37,11 @@ class arm:
         self.action_history.append(newAction)
         self.action_history.append(newReward)
 
+
+    def 
+
     def learn(self):
-        
+
 
 
 
