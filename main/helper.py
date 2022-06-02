@@ -105,11 +105,11 @@ def visualize_spaces(arm, START, OBSTACLES):
     plt.xlabel('x')
     plt.ylabel('y')
     plt.axis('scaled')
-    plt.xlim(-3.0, 3.0)
-    plt.ylim(-3.0, 3.0)
+    plt.xlim(-5, 5)
+    plt.ylim(-5, 5)
     plt.show()
 
-def clear_path(arm, q1, q2, EDGE_INC):
+def clear_path(arm, q1, q2, EDGE_INC, OBSTACLES):
     """
     :param arm: NLinkArm object
     :param q1, q2: Two configurations in S1 x S1
@@ -140,134 +140,17 @@ def clear_path(arm, q1, q2, EDGE_INC):
         while (q1_theta1<q2_theta1):
           q1_theta1 = q1_theta1+EDGE_INC*np.cos(alpha)
           q1_theta2 = q1_theta2+EDGE_INC*np.sin(alpha)
-          if(detect_collision(arm, (q1_theta1, q1_theta2))):
+          if(detect_collision(arm, (q1_theta1, q1_theta2), OBSTACLES)):
             return False
 
     else:
         while (q1_theta1>q2_theta1):
           q1_theta1 = q1_theta1-EDGE_INC*np.cos(alpha)
           q1_theta2 = q1_theta2+EDGE_INC*np.sin(alpha)
-          if(detect_collision(arm, (q1_theta1, q1_theta2))):
+          if(detect_collision(arm, (q1_theta1, q1_theta2), OBSTACLES)):
             return False    
 
     return True
-
-
-
-def find_qnew(tree, qrand, DELTA):
-    """
-    :param tree: RRT dictionary {(node_x, node_y): (parent_x, parent_y)}
-    :param qrand: Randomly sampled configuration
-    :return: qnear in tree, qnew between qnear and qrand with distance DELTA from qnear
-    """
-    min_dist = np.inf 
-    qnear = None 
-
-    #finding the nearest node
-    for key in tree.keys():
-      qrandpp, dist = closest_euclidean(qrand, key)
-
-      if (dist < min_dist):
-          min_dist = dist
-          qnear = key
-    
-    #adding the node on the way to the nearest node 
-    #what do you do if you have a collision here
-
-
-    #what if you cannot connect the node here?
-    if (min_dist <= DELTA):
-      #if (not qrandpp.any(None)):
-      return qnear, qrandpp
-
-      #else: 
-      #  return qnear, qrand
-
-
-    #what if you cannot connect the node here? (maybe we can check for this on the macro level)
-    else:
-      q1_theta1 = qnear[0] 
-      q1_theta2 = qnear[1]
-
-      #if (not qrandpp.any(None)):
-      q2_theta1 = qrandpp[0] 
-      q2_theta2 = qrandpp[1]
-      
-      #else: 
-      #  q2_theta1 = qrand[0]
-      #  q2_theta2 = qrand[1]
-
-
-      if ((q2_theta1-q1_theta1) == 0):
-        alpha = (np.pi)/2
-      
-      else:
-        m = (q2_theta2-q1_theta2)/(q2_theta1-q1_theta1)
-        alpha = np.arctan(m)
-
-      if (q1_theta1<q2_theta1):
-        qnew_theta1 = q1_theta1+DELTA*np.cos(alpha)
-      else: 
-        qnew_theta1 = q1_theta1-DELTA*np.cos(alpha)
-      
-      qnew_theta2 = q1_theta2+DELTA*np.sin(alpha)
-
-      qnew = (qnew_theta1, qnew_theta2)
-      return qnear, qnew
-
-
-def find_qnew_greedy(arm, tree, qrand, DELTA):
-    """
-    :param arm: NLinkArm object
-    :param tree: RRT dictionary {(node_x, node_y): (parent_x, parent_y)}
-    :param qrand: Randomly sampled configuration
-    :return: qnear in tree, qnew between qnear and qrand as close as possible to qrand in increments of DELTA
-    """
-    qnear, qnew = find_qnew(tree, qrand)
-
-    q1_theta1 = qnew[0]
-    q1_theta2 = qnew[1]
-
-    q2_theta1 = qrand[0]
-    q2_theta2 = qrand[1]
-
-    if ((q2_theta1-q1_theta1) == 0):
-        alpha = (np.pi)/2
-    else:
-      m = (q2_theta2-q1_theta2)/(q2_theta1-q1_theta1)
-      alpha = np.arctan(m)
-
-
-
-    if (q2_theta1 > q1_theta1):
-        while (q1_theta1<q2_theta1):
-          q1_theta1 = q1_theta1+DELTA*np.cos(alpha)
-          q1_theta2 = q1_theta2+DELTA*np.sin(alpha)
-          qnew = (q1_theta1, q1_theta2)
-          
-          if(clear_path(arm, qnear, qnew)):
-            continue
-
-          else:
-            return qnear, qnew
-       
-        return qnear, qrand  
-
-    else:
-        while (q1_theta1>q2_theta1):
-          q1_theta1 = q1_theta1-DELTA*np.cos(alpha)
-          q1_theta2 = q1_theta2+DELTA*np.sin(alpha)
-          qnew = (q1_theta1, q1_theta2)
-
-          if(clear_path(arm, qnear, qnew)):
-            continue
-
-          else:
-            return qnear, qnew
-        
-        return qnear, qrand  
-
-
 
 
 
@@ -281,8 +164,8 @@ def animate(arm, roadmap, route, START, OBSTACLES):
     plt.xlabel('joint 1')
     plt.ylabel('joint 2')
     plt.axis('scaled')
-    plt.xlim(-3.2, 3.2)
-    plt.ylim(-3.2, 3.2)
+    plt.xlim(-5, 5)
+    plt.ylim(-5, 5)
 
     ax2 = plt.subplot(1, 2, 2)
     arm.update_joints(START)
@@ -291,8 +174,8 @@ def animate(arm, roadmap, route, START, OBSTACLES):
     plt.xlabel('x')
     plt.ylabel('y')
     plt.axis('scaled')
-    plt.xlim(-3.0, 3.0)
-    plt.ylim(-3.0, 3.0)
+    plt.xlim(-5, 5)
+    plt.ylim(-5, 5)
     plt.pause(1)
 
 
@@ -301,10 +184,8 @@ def animate(arm, roadmap, route, START, OBSTACLES):
         print(config)
         arm.update_joints([config[0], config[1]])
         ax1.plot(config[0], config[1], "xr")
-        ax2.lines = []
+        #ax2.lines = []
         plot_arm(plt, ax2, arm, OBSTACLES)
-        # Uncomment here to save the sequence of frames
-        # plt.savefig('frame{:04d}.png'.format(i))
         plt.pause(0.3)
 
     plt.show()
