@@ -1,3 +1,4 @@
+from multiprocessing.connection import wait
 from re import S
 import tensorflow as tf
 from keras.layers import Dense, InputLayer, Dropout
@@ -10,6 +11,11 @@ from scipy.stats import multivariate_normal
 from pprint import pprint 
 from scipy.integrate import dblquad
 from constants import OBSTACLES, START, GOAL, LINK_LENGTH
+from tensorflow_probability import distributions
+
+tfd = distributions
+
+
 
 
 class policyGradientAlgorithm:
@@ -22,7 +28,7 @@ class policyGradientAlgorithm:
         self.output_dims = output_dims
         self.learning_rate = learning_rate
 
-        self.inputLayer = InputLayer(shape=(self.inputLayer_dims,))
+        self.inputLayer = InputLayer(self.inputLayer_dims)
         self.fc1 = Dense(self.fc1_dims, activation='relu')
         self.fc2 = Dense(self.fc2_dims, activation='relu')
         self.output = Dense(self.output_dims, activation='relu')
@@ -43,21 +49,23 @@ class policyGradientAlgorithm:
         return self.action_history[-1]
     
     def getNextAction(self, newState):
-        mu = newState
+        mu = newState[0]
         sigma = np.eye(2)
         nextAction = np.random.multivariate_normal(mean=mu, cov=sigma)
         return nextAction
 
     def getNextState(self, prevAction):
-        return self.network.predict(prevAction)
+        return self.network.predict(np.array([prevAction]))
 
     def getNextReward(self, newAction):
         reward = 0
         for obst in OBSTACLES:
-            obstPotentialFunction = multivariate_normal(mean=obst[:-1])
-            reward -= obstPotentialFunction.pdf(newAction)
+            obstPotentialFunction = tfd.MultivariateNormalFullCovariance(loc=obst[:-1],covariance_matrix=np.eye(2))
+            reward -= obstPotentialFunction.prob(newAction)
 
-        reward += multivariate_normal(mean=GOAL)
+        
+        goalPotentialFunction  = tfd.MultivariateNormalFullCovariance(loc=GOAL, covariance_matrix=np.eye)
+        reward += goalPotentialFunction.prob(newAction)
 
         return reward
 
@@ -67,7 +75,7 @@ class policyGradientAlgorithm:
         self.reward_history = []
 
 
-    def store_transition(self, newState, newAction, newReward):
+    def storeTransition(self, newState, newAction, newReward):
         self.state_history.append(newState)
         self.action_history.append(newAction)
         self.reward_history.append(newReward)
@@ -106,18 +114,18 @@ class policyGradientAlgorithm:
             #we have the action that we have taken 
 
     def computeLoss(self, action, state, discountedReward):
-        probDist = multivariate_normal(mean=state, cov=np.eye(2))
-        logPdf = np.log(probDist.pdf(action))
-
-        return discountedReward*logPdf
+        probDist = distributions.MultivariateNormalFullCovariance(loc=state, cov=np.eye(2))
+        logPdf = tf.math.log(probDist.prob(action))
+    
+        return -discountedReward*logPdf
 
 
             
 
 def trainNetwork(pgAlgo, epochs, iterations):
 
-    for epoch in epochs:
-        for iter in iterations:
+    for i in range(epochs):
+        for j in range(iterations):
             prevAction = pgAlgo.getPrevAction()
             newState = pgAlgo.getNextState(prevAction)
             newAction  = pgAlgo.getNextAction(newState)
@@ -131,6 +139,19 @@ def trainNetwork(pgAlgo, epochs, iterations):
         stateHistory = pgAlgo.getStateHistory()
         actionHistory = pgAlgo.getActionHistory()
         discountedRewardsHistory = pgAlgo.getDiscountedRewardHistory()
+
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("state, action, discountedreward history", stateHistory, actionHistory, discountedRewardsHistory)
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+
 
         assert(len(stateHistory)==len(actionHistory)==len(discountedRewardsHistory))
         for i in range(len(stateHistory)):
