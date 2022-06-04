@@ -1,13 +1,10 @@
-from multiprocessing.connection import wait
-from re import S
 import tensorflow as tf
 from keras.layers import Dense, InputLayer, Dropout
-import keras
+from tensorflow import keras
 from keras.optimizer_v2.adam import Adam
 from nlinkarm import NLinkArm
 from helper import visualize_spaces, animate
 import numpy as np
-from scipy.stats import multivariate_normal 
 from pprint import pprint 
 from scipy.integrate import dblquad
 from constants import OBSTACLES, START, GOAL, LINK_LENGTH
@@ -50,8 +47,9 @@ class policyGradientAlgorithm:
     
     def getNextAction(self, newState):
         mu = newState[0]
-        sigma = np.eye(2)
-        nextAction = np.random.multivariate_normal(mean=mu, cov=sigma)
+        sigma = [[1,0],[0,1]]
+        actionDist = tfd.MultivariateNormalFullCovariance(loc=mu, covariance_matrix=sigma)
+        nextAction, logProb = actionDist.experimental_sample_and_log_prob()
         return nextAction
 
     def getNextState(self, prevAction):
@@ -60,11 +58,11 @@ class policyGradientAlgorithm:
     def getNextReward(self, newAction):
         reward = 0
         for obst in OBSTACLES:
-            obstPotentialFunction = tfd.MultivariateNormalFullCovariance(loc=obst[:-1],covariance_matrix=np.eye(2))
+            obstPotentialFunction = tfd.MultivariateNormalFullCovariance(loc=obst[:-1],covariance_matrix=[[1,0],[0,1]])
             reward -= obstPotentialFunction.prob(newAction)
 
         
-        goalPotentialFunction  = tfd.MultivariateNormalFullCovariance(loc=GOAL, covariance_matrix=np.eye)
+        goalPotentialFunction  = tfd.MultivariateNormalFullCovariance(loc=GOAL, covariance_matrix=[[1,0],[0,1]])
         reward += goalPotentialFunction.prob(newAction)
 
         return reward
@@ -114,7 +112,7 @@ class policyGradientAlgorithm:
             #we have the action that we have taken 
 
     def computeLoss(self, action, state, discountedReward):
-        probDist = distributions.MultivariateNormalFullCovariance(loc=state, cov=np.eye(2))
+        probDist = distributions.MultivariateNormalFullCovariance(loc=state, covariance_matrix=[[1,0],[0,1]])
         logPdf = tf.math.log(probDist.prob(action))
     
         return -discountedReward*logPdf
@@ -145,7 +143,32 @@ def trainNetwork(pgAlgo, epochs, iterations):
         print("XXXXXXXXXXXXXXXXXXXXXXXX")
         print("XXXXXXXXXXXXXXXXXXXXXXXX")
         print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("state, action, discountedreward history", stateHistory, actionHistory, discountedRewardsHistory)
+        print("State History")
+        pprint(stateHistory)
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("Action History")
+        pprint(actionHistory)
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXXXXXXXXXXX")
+        print("Discounted Reward History")
+        pprint(discountedRewardsHistory)
         print("XXXXXXXXXXXXXXXXXXXXXXXX")
         print("XXXXXXXXXXXXXXXXXXXXXXXX")
         print("XXXXXXXXXXXXXXXXXXXXXXXX")
@@ -153,9 +176,8 @@ def trainNetwork(pgAlgo, epochs, iterations):
         print("XXXXXXXXXXXXXXXXXXXXXXXX")
 
 
-        assert(len(stateHistory)==len(actionHistory)==len(discountedRewardsHistory))
-        for i in range(len(stateHistory)):
-            state, action, discountedRewardsHistory = stateHistory[i], actionHistory[i], discountedRewardsHistory[i]
+        for k in range(len(stateHistory)):
+            state, action, discountedRewardsHistory = stateHistory[k], actionHistory[k], discountedRewardsHistory[k]
 
 
             with tf.GradientTape() as tape:
@@ -165,11 +187,13 @@ def trainNetwork(pgAlgo, epochs, iterations):
                 adam.apply_gradients(zip(grads,pgAlgo.network.trainable_variables))
 
         pgAlgo.resetExperiment()
+    
+
 
 
 def main():
     ARM = NLinkArm(LINK_LENGTH, [0,0])
-    visualize_spaces(ARM, START, OBSTACLES)
+    #visualize_spaces(ARM, START, OBSTACLES)
 
     pgAlgo = policyGradientAlgorithm()
 
@@ -177,7 +201,7 @@ def main():
     trainNetwork(pgAlgo, epochs=10, iterations=10)
 
 
-    pgAlgo.print()
+    #pgAlgo.print()
     '''roadmap = {(1.0,0.0):None,
                (0.83, 0.29):(1.0,0.0),
                (0.62, 0.53):(0.83, 0.29),
