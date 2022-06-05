@@ -13,7 +13,7 @@ tfd = distributions
 
 
 class policyGradientAlgorithm:
-    def __init__(self, learning_rate=0.001 ,gamma=0.003, horizon=4, inputLayer_dims=2, fc1_dims=256, fc2_dims=256, output_dims=2):
+    def __init__(self, learning_rate=0.001, gamma=0.003, horizon=4, inputLayer_dims=2, fc1_dims=256, fc2_dims=256, output_dims=2):
         self.gamma = gamma
         self.horizon = horizon
         self.fc1_dims = fc1_dims
@@ -34,8 +34,8 @@ class policyGradientAlgorithm:
             self.output
         ])
 
-        self.state_history = [GOAL] 
-        self.action_history = [GOAL] 
+        self.state_history = [START]
+        self.action_history = [START]
         self.reward_history = [0] 
         self.discountedRewardHistory = None
 
@@ -145,9 +145,29 @@ def trainNetwork(pgAlgo, epochs, iterations):
                 adam = Adam(learning_rate=pgAlgo.learning_rate)
                 adam.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
             '''
-
-
             pgAlgo.resetExperiment()
+
+
+def testNetwork(pgAlgo, steps):
+    ARM = NLinkArm(LINK_LENGTH, [0, 0])
+    s = tuple(START)
+    g = tuple(GOAL)
+
+    route = [s]
+    roadmap = {s:None}
+
+    for i in range(steps):
+        p = route[-1]
+        prevPosition = np.array(p)
+        nextPosition = pgAlgo.network.predict(prevPosition)
+        n = tuple(nextPosition)
+        route.append(n)
+        roadmap[n] = p
+
+    animate(ARM, roadmap, route, START, OBSTACLES)
+
+
+
 
 def main():
     ARM = NLinkArm(LINK_LENGTH, [0,0])
@@ -157,6 +177,10 @@ def main():
 
 
     trainNetwork(pgAlgo, epochs=10, iterations=10)
+    pgAlgo.print()
+
+
+    testNetwork(pgAlgo, steps=10)
 
 
     #pgAlgo.print()
