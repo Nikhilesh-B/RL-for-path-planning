@@ -117,23 +117,25 @@ class policyGradientAlgorithm:
 
 def trainNetwork(pgAlgo, epochs, iterations):
     for i in range(epochs):
-        with tf.GradientTape() as tape:
             for j in range(iterations):
-                prevAction = pgAlgo.getPrevAction()
-                newState = pgAlgo.network(tf.convert_to_tensor(prevAction))
+                with tf.GradientTape() as tape:
+                    prevAction = pgAlgo.getPrevAction()
+                    newState = pgAlgo.network(tf.convert_to_tensor(prevAction))
 
-                newAction = pgAlgo.getNextAction(newState)
-                newReward = pgAlgo.getNextReward(newAction)
+                    newAction = pgAlgo.getNextAction(newState)
+                    newReward = pgAlgo.getNextReward(newAction)
 
-                pgAlgo.storeTransition(newState, newAction, newReward)
-
+                    policy_val = pgAlgo.computePolicy(newState, newAction, newReward)
+                    grads = tape.gradient(policy_val, pgAlgo.network.trainable_variables)
+                    adam = Adam(learning_rate=pgAlgo.learning_rate)
+                    adam.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
+            '''
             pgAlgo.computeDiscountedReward()
             stateHistory = pgAlgo.getStateHistory()
             actionHistory = pgAlgo.getActionHistory()
             discountedRewardsHistory = pgAlgo.getDiscountedRewardHistory().numpy()
 
-            print("discounted reward history", discountedRewardsHistory)
-
+           
             for k in range(len(stateHistory)):
                 state = stateHistory[k]
                 action = actionHistory[k]
@@ -142,9 +144,10 @@ def trainNetwork(pgAlgo, epochs, iterations):
                 grads = tape.gradient(policy_val, pgAlgo.network.trainable_variables)
                 adam = Adam(learning_rate=pgAlgo.learning_rate)
                 adam.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
+            '''
 
-        tape.reset()
-        pgAlgo.resetExperiment()
+
+            pgAlgo.resetExperiment()
 
 def main():
     ARM = NLinkArm(LINK_LENGTH, [0,0])
