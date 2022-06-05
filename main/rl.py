@@ -84,11 +84,17 @@ class policyGradientAlgorithm:
         return self.discountedRewardHistory
 
     def print(self):
-        print("---------------")
-        print("Action history", self.action_history)
         print("XXXXXXXXXXXXXXX")
-        print("---------------")
-        print("State history", self.state_history)
+        print("Network summary")
+        self.network.summary()
+        print("XXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXX")
+        print("Action history")
+        print(self.action_history)
+        print("XXXXXXXXXXXXXXX")
+        print("XXXXXXXXXXXXXXX")
+        print("State history")
+        print(self.state_history)
         print("XXXXXXXXXXXXXXXX")
 
 
@@ -117,39 +123,37 @@ class policyGradientAlgorithm:
 
 def trainNetwork(pgAlgo, epochs, iterations):
     for i in range(epochs):
-            for j in range(iterations):
-                with tf.GradientTape() as tape:
-                    prevAction = pgAlgo.getPrevAction()
-                    newState = pgAlgo.network(tf.convert_to_tensor(prevAction))
+        for j in range(iterations):
+            with tf.GradientTape() as tape:
+                prevAction = pgAlgo.getPrevAction()
+                newState = pgAlgo.network(tf.convert_to_tensor(prevAction))
+                newAction = pgAlgo.getNextAction(newState)
+                newReward = pgAlgo.getNextReward(newAction)
 
-                    newAction = pgAlgo.getNextAction(newState)
-                    newReward = pgAlgo.getNextReward(newAction)
-
-                    policy_val = pgAlgo.computePolicy(newState, newAction, newReward)
-                    grads = tape.gradient(policy_val, pgAlgo.network.trainable_variables)
-                    adam = Adam(learning_rate=pgAlgo.learning_rate)
-                    adam.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
-            '''
-            pgAlgo.computeDiscountedReward()
-            stateHistory = pgAlgo.getStateHistory()
-            actionHistory = pgAlgo.getActionHistory()
-            discountedRewardsHistory = pgAlgo.getDiscountedRewardHistory().numpy()
-
-           
-            for k in range(len(stateHistory)):
-                state = stateHistory[k]
-                action = actionHistory[k]
-                discountedRewardsHistory = discountedRewardsHistory[k]
-                policy_val = pgAlgo.computePolicy(state, action, discountedRewardsHistory)
+                policy_val = pgAlgo.computePolicy(newState, newAction, newReward)
                 grads = tape.gradient(policy_val, pgAlgo.network.trainable_variables)
                 adam = Adam(learning_rate=pgAlgo.learning_rate)
                 adam.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
-            '''
-            pgAlgo.resetExperiment()
+        '''
+        pgAlgo.computeDiscountedReward()
+        stateHistory = pgAlgo.getStateHistory()
+        actionHistory = pgAlgo.getActionHistory()
+        discountedRewardsHistory = pgAlgo.getDiscountedRewardHistory().numpy()
+
+       
+        for k in range(len(stateHistory)):
+            state = stateHistory[k]
+            action = actionHistory[k]
+            discountedRewardsHistory = discountedRewardsHistory[k]
+            policy_val = pgAlgo.computePolicy(state, action, discountedRewardsHistory)
+            grads = tape.gradient(policy_val, pgAlgo.network.trainable_variables)
+            adam = Adam(learning_rate=pgAlgo.learning_rate)
+            adam.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
+        '''
+        pgAlgo.resetExperiment()
 
 
-def testNetwork(pgAlgo, steps):
-    ARM = NLinkArm(LINK_LENGTH, [0, 0])
+def testNetwork(pgAlgo, steps, ARM):
     s = tuple(START)
     g = tuple(GOAL)
 
@@ -158,11 +162,23 @@ def testNetwork(pgAlgo, steps):
 
     for i in range(steps):
         p = route[-1]
-        prevPosition = np.array(p)
-        nextPosition = pgAlgo.network.predict(prevPosition)
-        n = tuple(nextPosition)
+        prevPosition = np.array([np.array(p)])
+        print("Prev Position", prevPosition)
+        print("Converted to tensor", tf.convert_to_tensor(prevPosition))
+        nextPosition = pgAlgo.network.predict(tf.convert_to_tensor(prevPosition))
+        n = tuple(nextPosition[0])
         route.append(n)
         roadmap[n] = p
+
+        if np.linalg.norm(np.array(g) - np.array(n)) < 0.2:
+            break
+
+
+
+    print("route")
+    print(route)
+    print("roadmap")
+    print(roadmap)
 
     animate(ARM, roadmap, route, START, OBSTACLES)
 
@@ -171,8 +187,18 @@ def testNetwork(pgAlgo, steps):
 
 def main():
     ARM = NLinkArm(LINK_LENGTH, [0,0])
-    #visualize_spaces(ARM, START, OBSTACLES)
+    visualize_spaces(ARM, START, OBSTACLES)
 
+    roadmap = {(1.0,0.0):None,
+               (0.83, 0.29):(1.0,0.0),
+               (0.62, 0.53):(0.83, 0.29),
+               (1.0,0.5):(1.33,0.52)}
+
+    route = [(1.0,0.0),(0.83,0.29),(0.62,0.53),(1.33,0.53),(1.0,0.5)]
+
+    animate(ARM, roadmap, route, START, OBSTACLES)
+
+    '''
     pgAlgo = policyGradientAlgorithm()
 
 
@@ -180,18 +206,10 @@ def main():
     pgAlgo.print()
 
 
-    testNetwork(pgAlgo, steps=10)
-
-
-    #pgAlgo.print()
-    '''roadmap = {(1.0,0.0):None,
-               (0.83, 0.29):(1.0,0.0),
-               (0.62, 0.53):(0.83, 0.29),
-               (1.0,0.5):(1.33,0.52)}'''
-
-    #route = [(1.0,0.0),(0.83,0.29),(0.62,0.53),(1.33,0.53),(1.0,0.5)]
-
-    #animate(ARM, roadmap, route, START, OBSTACLES)
+    testNetwork(pgAlgo, steps=10, ARM=ARM)
+    '''
+    
+    
 
 if __name__ == "__main__":
     main()
