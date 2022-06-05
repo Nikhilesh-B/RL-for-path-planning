@@ -112,11 +112,11 @@ class policyGradientAlgorithm:
 
         return self.discountedRewardHistory
 
-    def computeLoss(self, action, state, discountedReward):
+    def computePolicy(self, action, state, discountedReward):
         probDist = distributions.MultivariateNormalFullCovariance(loc=state, covariance_matrix=[[1,0],[0,1]])
         logPdf = tf.math.log(probDist.prob(action))
     
-        return -discountedReward*logPdf
+        return discountedReward*logPdf
 
 
             
@@ -138,10 +138,10 @@ def trainNetwork(pgAlgo, epochs, iterations):
 
             for k in range(len(stateHistory)):
                 state, action, discountedRewardsHistory = stateHistory[k], actionHistory[k], discountedRewardsHistory[k]
-                loss_val = pgAlgo.computeLoss(state, action, discountedRewardsHistory)
-                grads = tape.gradient(loss_val, pgAlgo.network.trainable_variables)
+                policy_val = pgAlgo.computePolicy(state, action, discountedRewardsHistory)
+                grads = tape.gradient(policy_val, pgAlgo.network.trainable_variables)
                 adam = Adam(learning_rate=pgAlgo.learning_rate)
-                adam.apply_gradients(zip(grads,pgAlgo.network.trainable_variables))
+                adam.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
 
         tape.reset()
         pgAlgo.resetExperiment()
