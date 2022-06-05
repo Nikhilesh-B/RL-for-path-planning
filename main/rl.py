@@ -6,13 +6,10 @@ from nlinkarm import NLinkArm
 from helper import visualize_spaces, animate
 from pprint import pprint
 import numpy as np
-from scipy.integrate import dblquad
 from constants import OBSTACLES, START, GOAL, LINK_LENGTH
 from tensorflow_probability import distributions
 
 tfd = distributions
-
-
 
 
 class policyGradientAlgorithm:
@@ -25,7 +22,7 @@ class policyGradientAlgorithm:
         self.output_dims = output_dims
         self.learning_rate = learning_rate
 
-        self.inputLayer = InputLayer(self.inputLayer_dims)
+        self.inputLayer = InputLayer(input_shape=(self.inputLayer_dims,))
         self.fc1 = Dense(self.fc1_dims, activation='relu')
         self.fc2 = Dense(self.fc2_dims, activation='relu')
         self.output = Dense(self.output_dims, activation='relu')
@@ -43,7 +40,7 @@ class policyGradientAlgorithm:
         self.discountedRewardHistory = None
 
     def getPrevAction(self):
-        return self.action_history[-1]
+        return [self.action_history[-1]]
     
     def getNextAction(self, newState):
         mu = newState[0]
@@ -52,9 +49,6 @@ class policyGradientAlgorithm:
         nextAction, logProb = actionDist.experimental_sample_and_log_prob()
         return nextAction
 
-    def getNextState(self, prevAction):
-        prevAction = tf.convert_to_tensor(np.array([prevAction]))
-        return self.network.predict(prevAction)
 
     def getNextReward(self, newAction):
         reward = 0
@@ -69,9 +63,9 @@ class policyGradientAlgorithm:
         return reward
 
     def resetExperiment(self):
-        self.state_history = tf.constant([])
-        self.action_history = []
-        self.reward_history = []
+        self.state_history = [GOAL]
+        self.action_history = [GOAL]
+        self.reward_history = [0]
 
 
     def storeTransition(self, newState, newAction, newReward):
@@ -126,18 +120,24 @@ def trainNetwork(pgAlgo, epochs, iterations):
         with tf.GradientTape() as tape:
             for j in range(iterations):
                 prevAction = pgAlgo.getPrevAction()
-                newState = pgAlgo.getNextState(prevAction)
+                newState = pgAlgo.network(tf.convert_to_tensor(prevAction))
+
                 newAction = pgAlgo.getNextAction(newState)
                 newReward = pgAlgo.getNextReward(newAction)
+
                 pgAlgo.storeTransition(newState, newAction, newReward)
 
             pgAlgo.computeDiscountedReward()
             stateHistory = pgAlgo.getStateHistory()
             actionHistory = pgAlgo.getActionHistory()
-            discountedRewardsHistory = pgAlgo.getDiscountedRewardHistory()
+            discountedRewardsHistory = pgAlgo.getDiscountedRewardHistory().numpy()
+
+            print("discounted reward history", discountedRewardsHistory)
 
             for k in range(len(stateHistory)):
-                state, action, discountedRewardsHistory = stateHistory[k], actionHistory[k], discountedRewardsHistory[k]
+                state = stateHistory[k]
+                action = actionHistory[k]
+                discountedRewardsHistory = discountedRewardsHistory[k]
                 policy_val = pgAlgo.computePolicy(state, action, discountedRewardsHistory)
                 grads = tape.gradient(policy_val, pgAlgo.network.trainable_variables)
                 adam = Adam(learning_rate=pgAlgo.learning_rate)
@@ -164,7 +164,7 @@ def main():
 
     #route = [(1.0,0.0),(0.83,0.29),(0.62,0.53),(1.33,0.53),(1.0,0.5)]
 
-   #animate(ARM, roadmap, route, START, OBSTACLES) 
+    #animate(ARM, roadmap, route, START, OBSTACLES)
 
 if __name__ == "__main__":
     main()
