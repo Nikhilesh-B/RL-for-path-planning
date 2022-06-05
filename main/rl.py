@@ -4,8 +4,8 @@ from tensorflow import keras
 from keras.optimizer_v2.adam import Adam
 from nlinkarm import NLinkArm
 from helper import visualize_spaces, animate
+from pprint import pprint
 import numpy as np
-from pprint import pprint 
 from scipy.integrate import dblquad
 from constants import OBSTACLES, START, GOAL, LINK_LENGTH
 from tensorflow_probability import distributions
@@ -53,7 +53,8 @@ class policyGradientAlgorithm:
         return nextAction
 
     def getNextState(self, prevAction):
-        return self.network.predict(np.array([prevAction]))
+        prevAction = tf.convert_to_tensor(np.array([prevAction]))
+        return self.network.predict(prevAction)
 
     def getNextReward(self, newAction):
         reward = 0
@@ -68,7 +69,7 @@ class policyGradientAlgorithm:
         return reward
 
     def resetExperiment(self):
-        self.state_history = []
+        self.state_history = tf.constant([])
         self.action_history = []
         self.reward_history = []
 
@@ -99,17 +100,17 @@ class policyGradientAlgorithm:
 
 
     def computeDiscountedReward(self):
-        self.discountedRewardHistory = np.zeros(len(self.state_history))
+        self.discountedRewardHistory = [0]*len(self.state_history)
         for k in range(0, len(self.reward_history)):
             val = 0
             for t in range(k, len(self.reward_history)):
-                val += self.reward_history[t]*((self.gamma)**(t-k))
+                val += self.reward_history[t]*(self.gamma ** (t - k))
             
             self.discountedRewardHistory[k] = val
-        
-        return self.discountedRewardHistory
 
-            #we have the action that we have taken 
+        self.discountedRewardHistory = tf.convert_to_tensor(self.discountedRewardHistory)
+
+        return self.discountedRewardHistory
 
     def computeLoss(self, action, state, discountedReward):
         probDist = distributions.MultivariateNormalFullCovariance(loc=state, covariance_matrix=[[1,0],[0,1]])
@@ -121,75 +122,29 @@ class policyGradientAlgorithm:
             
 
 def trainNetwork(pgAlgo, epochs, iterations):
-
     for i in range(epochs):
-        for j in range(iterations):
-            prevAction = pgAlgo.getPrevAction()
-            newState = pgAlgo.getNextState(prevAction)
-            newAction  = pgAlgo.getNextAction(newState)
-            newReward  = pgAlgo.getNextReward(newAction)
-            
-            pgAlgo.storeTransition(newState, newAction, newReward)
+        with tf.GradientTape() as tape:
+            for j in range(iterations):
+                prevAction = pgAlgo.getPrevAction()
+                newState = pgAlgo.getNextState(prevAction)
+                newAction = pgAlgo.getNextAction(newState)
+                newReward = pgAlgo.getNextReward(newAction)
+                pgAlgo.storeTransition(newState, newAction, newReward)
 
-        pgAlgo.computeDiscountedReward()
+            pgAlgo.computeDiscountedReward()
+            stateHistory = pgAlgo.getStateHistory()
+            actionHistory = pgAlgo.getActionHistory()
+            discountedRewardsHistory = pgAlgo.getDiscountedRewardHistory()
 
-        
-        stateHistory = pgAlgo.getStateHistory()
-        actionHistory = pgAlgo.getActionHistory()
-        discountedRewardsHistory = pgAlgo.getDiscountedRewardHistory()
-
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("State History")
-        pprint(stateHistory)
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("Action History")
-        pprint(actionHistory)
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("Discounted Reward History")
-        pprint(discountedRewardsHistory)
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXXXXXXXXXXX")
-
-
-        for k in range(len(stateHistory)):
-            state, action, discountedRewardsHistory = stateHistory[k], actionHistory[k], discountedRewardsHistory[k]
-
-
-            with tf.GradientTape() as tape:
+            for k in range(len(stateHistory)):
+                state, action, discountedRewardsHistory = stateHistory[k], actionHistory[k], discountedRewardsHistory[k]
                 loss_val = pgAlgo.computeLoss(state, action, discountedRewardsHistory)
                 grads = tape.gradient(loss_val, pgAlgo.network.trainable_variables)
                 adam = Adam(learning_rate=pgAlgo.learning_rate)
                 adam.apply_gradients(zip(grads,pgAlgo.network.trainable_variables))
 
+        tape.reset()
         pgAlgo.resetExperiment()
-    
-
-
 
 def main():
     ARM = NLinkArm(LINK_LENGTH, [0,0])
