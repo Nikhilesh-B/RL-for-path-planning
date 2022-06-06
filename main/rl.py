@@ -184,26 +184,22 @@ def main():
     pgAlgo = policyGradientAlgorithm()
 
 
-    trainNetwork(pgAlgo, epochs=10, iterations=10, Arm=Arm)
+    trainNetwork(pgAlgo, epochs=10, iterations=200, Arm=Arm)
     pgAlgo.print()
 
 
-    testNetwork(pgAlgo, steps=10, Arm=Arm)
+    testNetwork(pgAlgo, steps=100, Arm=Arm)
 
 
 if __name__ == "__main__":
     main()
 
 
+'''roadmap = {(1.0,0.0):None,
+            (1.1, 0.0):(1.0,0.0),
+            (1.2, 0.0):(1.1, 0.0),
+            (1.3, 0.0):(1.2, 0.0)}
 
+route = [(1.0,0.0),(1.1,0.0),(1.2,0.0),(1.3,0.0)]
 
-
-
-    '''roadmap = {(1.0,0.0):None,
-               (1.1, 0.0):(1.0,0.0),
-               (1.2, 0.0):(1.1, 0.0),
-               (1.3, 0.0):(1.2, 0.0)}
-
-    route = [(1.0,0.0),(1.1,0.0),(1.2,0.0),(1.3,0.0)]
-
-    animate(Arm, roadmap, route, START, OBSTACLES)'''
+animate(Arm, roadmap, route, START, OBSTACLES)'''
