@@ -49,50 +49,43 @@ class policyGradientAlgorithm:
         nextAction, logProb = actionDist.experimental_sample_and_log_prob()
         return nextAction
 
-    def clostToGoal(self, ARM, newAction):
+    def closeToGoal(self, newAction, Arm, threshold):
         theta0 = newAction[0]
         theta1 = newAction[1]
 
-        x_joint1, y_joint1 = 0, 0
-        x_joint2, y_joint2 = 0, 0
-
-        link1_length, link2_length = ARM.link_lengths[0], ARM.link_lengths[1]
+        link1_length, link2_length = Arm.link_lengths[0], Arm.link_lengths[1]
 
         x_joint1, y_joint1 = link1_length*np.cos(theta0), link1_length*np.sin(theta0)
         x_joint2, y_joint2 = x_joint1+link2_length*np.cos(theta1), y_joint1+link2_length*np.sin(theta1)
 
         endEffectorPosition = np.array([x_joint2, y_joint2])
 
-        potentialFunction
 
+        goalPotentialFunction  = tfd.MultivariateNormalFullCovariance(loc=GOAL, covariance_matrix=[[0.5,0],[0,0.5]])
 
+        isCloseToGoal = (np.linalg.norm(endEffectorPosition-GOAL) <= threshold)
 
+        return 1000*goalPotentialFunction.prob(endEffectorPosition), isCloseToGoal
 
-
-    def getNextReward(self, newAction, ARM):
-        #this next reward should give you higher and higher values if your close to the goal configuration
+    def getNextReward(self, newAction, Arm):
         reward = 0
-        if detect_collision(arm=ARM, config=newAction, OBSTACLES=OBSTACLES):
-            reward -= 100
+        if detect_collision(arm=Arm, config=newAction, OBSTACLES=OBSTACLES):
+            reward -= 1000
 
-        if self.closeToGoal(ARM, newAction):
-            reward += 200
+        goalPotenitalFunction, isCloseToGoal = self.closeToGoal(newAction=newAction, Arm=Arm, threshold=0.3)
+        reward += goalPotenitalFunction
 
         return reward
-
-
 
     def resetExperiment(self):
         self.state_history = [GOAL]
         self.action_history = [GOAL]
         self.reward_history = [0]
 
-
     def storeTransition(self, newState, newAction, newReward):
         self.state_history.append(newState)
         self.action_history.append(newAction)
         self.reward_history.append(newReward)
-
 
     def getStateHistory(self):
         return self.state_history
@@ -108,8 +101,6 @@ class policyGradientAlgorithm:
         print("Network summary")
         self.network.summary()
         print("XXXXXXXXXXXXXXX")
-
-
 
     def computeDiscountedReward(self):
         self.discountedRewardHistory = [0]*len(self.state_history)
@@ -131,16 +122,14 @@ class policyGradientAlgorithm:
         return discountedReward*logPdf
 
 
-            
-
-def trainNetwork(pgAlgo, epochs, iterations):
+def trainNetwork(pgAlgo, epochs, iterations, Arm):
     for i in range(epochs):
         for j in range(iterations):
             with tf.GradientTape() as tape:
                 prevAction = pgAlgo.getPrevAction()
                 newState = pgAlgo.network(tf.convert_to_tensor(prevAction))
                 newAction = pgAlgo.getNextAction(newState)
-                newReward = pgAlgo.getNextReward(newAction)
+                newReward = pgAlgo.getNextReward(newAction, Arm)
 
                 policy_val = pgAlgo.computePolicy(newState, newAction, newReward)
                 grads = tape.gradient(policy_val, pgAlgo.network.trainable_variables)
@@ -165,7 +154,7 @@ def trainNetwork(pgAlgo, epochs, iterations):
         pgAlgo.resetExperiment()
 
 
-def testNetwork(pgAlgo, steps, ARM):
+def testNetwork(pgAlgo, steps, Arm):
     s = tuple(START)
     g = tuple(GOAL)
 
@@ -180,39 +169,41 @@ def testNetwork(pgAlgo, steps, ARM):
         route.append(n)
         roadmap[n] = p
 
-        if np.linalg.norm(np.array(g) - np.array(n)) < 0.2:
+        goalPotentialFunctionValue, isCloseToGoal = pgAlgo.closeToGoal(Arm=Arm, newAction=nextPosition[0], threshold=0.1)
+
+        if isCloseToGoal:
             break
 
-    animate(ARM, roadmap, route, START, OBSTACLES)
-
-
+    animate(Arm, roadmap, route, START, OBSTACLES)
 
 
 def main():
-    ARM = NLinkArm(LINK_LENGTH, [0,0])
-    visualize_spaces(ARM, START, OBSTACLES)
+    Arm = NLinkArm(LINK_LENGTH, [0,0])
+    visualize_spaces(Arm, START, OBSTACLES)
+    
+    pgAlgo = policyGradientAlgorithm()
 
-    roadmap = {(1.0,0.0):None,
+
+    trainNetwork(pgAlgo, epochs=10, iterations=10, Arm=Arm)
+    pgAlgo.print()
+
+
+    testNetwork(pgAlgo, steps=10, Arm=Arm)
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
+
+    '''roadmap = {(1.0,0.0):None,
                (1.1, 0.0):(1.0,0.0),
                (1.2, 0.0):(1.1, 0.0),
                (1.3, 0.0):(1.2, 0.0)}
 
     route = [(1.0,0.0),(1.1,0.0),(1.2,0.0),(1.3,0.0)]
 
-    animate(ARM, roadmap, route, START, OBSTACLES)
-
-    '''
-    pgAlgo = policyGradientAlgorithm()
-
-
-    trainNetwork(pgAlgo, epochs=10, iterations=10)
-    pgAlgo.print()
-
-
-    testNetwork(pgAlgo, steps=10, ARM=ARM)
-    '''
-    
-    
-
-if __name__ == "__main__":
-    main()
+    animate(Arm, roadmap, route, START, OBSTACLES)'''
