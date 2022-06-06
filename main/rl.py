@@ -3,7 +3,7 @@ from keras.layers import Dense, InputLayer, Dropout
 from tensorflow import keras
 from keras.optimizer_v2.adam import Adam
 from nlinkarm import NLinkArm
-from helper import visualize_spaces, animate
+from helper import visualize_spaces, animate, detect_collision
 from pprint import pprint
 import numpy as np
 from constants import OBSTACLES, START, GOAL, LINK_LENGTH
@@ -49,18 +49,38 @@ class policyGradientAlgorithm:
         nextAction, logProb = actionDist.experimental_sample_and_log_prob()
         return nextAction
 
+    def clostToGoal(self, ARM, newAction):
+        theta0 = newAction[0]
+        theta1 = newAction[1]
 
-    def getNextReward(self, newAction):
+        x_joint1, y_joint1 = 0, 0
+        x_joint2, y_joint2 = 0, 0
+
+        link1_length, link2_length = ARM.link_lengths[0], ARM.link_lengths[1]
+
+        x_joint1, y_joint1 = link1_length*np.cos(theta0), link1_length*np.sin(theta0)
+        x_joint2, y_joint2 = x_joint1+link2_length*np.cos(theta1), y_joint1+link2_length*np.sin(theta1)
+
+        endEffectorPosition = np.array([x_joint2, y_joint2])
+
+        potentialFunction
+
+
+
+
+
+    def getNextReward(self, newAction, ARM):
+        #this next reward should give you higher and higher values if your close to the goal configuration
         reward = 0
-        for obst in OBSTACLES:
-            obstPotentialFunction = tfd.MultivariateNormalFullCovariance(loc=obst[:-1],covariance_matrix=[[1,0],[0,1]])
-            reward -= obstPotentialFunction.prob(newAction)
+        if detect_collision(arm=ARM, config=newAction, OBSTACLES=OBSTACLES):
+            reward -= 100
 
-        
-        goalPotentialFunction  = tfd.MultivariateNormalFullCovariance(loc=GOAL, covariance_matrix=[[1,0],[0,1]])
-        reward += goalPotentialFunction.prob(newAction)
+        if self.closeToGoal(ARM, newAction):
+            reward += 200
 
         return reward
+
+
 
     def resetExperiment(self):
         self.state_history = [GOAL]
@@ -88,14 +108,6 @@ class policyGradientAlgorithm:
         print("Network summary")
         self.network.summary()
         print("XXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXX")
-        print("Action history")
-        print(self.action_history)
-        print("XXXXXXXXXXXXXXX")
-        print("XXXXXXXXXXXXXXX")
-        print("State history")
-        print(self.state_history)
-        print("XXXXXXXXXXXXXXXX")
 
 
 
@@ -163,8 +175,6 @@ def testNetwork(pgAlgo, steps, ARM):
     for i in range(steps):
         p = route[-1]
         prevPosition = np.array([np.array(p)])
-        print("Prev Position", prevPosition)
-        print("Converted to tensor", tf.convert_to_tensor(prevPosition))
         nextPosition = pgAlgo.network.predict(tf.convert_to_tensor(prevPosition))
         n = tuple(nextPosition[0])
         route.append(n)
@@ -172,13 +182,6 @@ def testNetwork(pgAlgo, steps, ARM):
 
         if np.linalg.norm(np.array(g) - np.array(n)) < 0.2:
             break
-
-
-
-    print("route")
-    print(route)
-    print("roadmap")
-    print(roadmap)
 
     animate(ARM, roadmap, route, START, OBSTACLES)
 
@@ -190,11 +193,11 @@ def main():
     visualize_spaces(ARM, START, OBSTACLES)
 
     roadmap = {(1.0,0.0):None,
-               (0.83, 0.29):(1.0,0.0),
-               (0.62, 0.53):(0.83, 0.29),
-               (1.0,0.5):(1.33,0.52)}
+               (1.1, 0.0):(1.0,0.0),
+               (1.2, 0.0):(1.1, 0.0),
+               (1.3, 0.0):(1.2, 0.0)}
 
-    route = [(1.0,0.0),(0.83,0.29),(0.62,0.53),(1.33,0.53),(1.0,0.5)]
+    route = [(1.0,0.0),(1.1,0.0),(1.2,0.0),(1.3,0.0)]
 
     animate(ARM, roadmap, route, START, OBSTACLES)
 
