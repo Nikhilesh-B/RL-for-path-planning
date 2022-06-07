@@ -13,7 +13,8 @@ tfd = distributions
 
 
 class policyGradientAlgorithm:
-    def __init__(self, learning_rate=0.001, gamma=0.003, horizon=4, inputLayer_dims=2, fc1_dims=256, fc2_dims=256, output_dims=2):
+    def __init__(self, learning_rate=0.001, gamma=0.003, horizon=4, 
+                inputLayer_dims=2, fc1_dims=10, fc2_dims=10, output_dims=2):
         self.gamma = gamma
         self.horizon = horizon
         self.fc1_dims = fc1_dims
@@ -60,26 +61,31 @@ class policyGradientAlgorithm:
 
         endEffectorPosition = np.array([x_joint2, y_joint2])
 
+        '''goalPotentialFunction  = tfd.MultivariateNormalFullCovariance(loc=GOAL, covariance_matrix=[[10,0],[0,10]])'''
 
-        goalPotentialFunction  = tfd.MultivariateNormalFullCovariance(loc=GOAL, covariance_matrix=[[0.5,0],[0,0.5]])
+        goalPotentialFunction = 10000/(1+np.linalg.norm(endEffectorPosition-GOAL))
 
         isCloseToGoal = (np.linalg.norm(endEffectorPosition-GOAL) <= threshold)
 
-        return 1000*goalPotentialFunction.prob(endEffectorPosition), isCloseToGoal
+        return goalPotentialFunction, isCloseToGoal
 
     def getNextReward(self, newAction, Arm):
         reward = 0
+        print("Reward after initialization=",reward)
         if detect_collision(arm=Arm, config=newAction, OBSTACLES=OBSTACLES):
             reward -= 1000
 
+        print("Reward before goal=",reward)
         goalPotenitalFunction, isCloseToGoal = self.closeToGoal(newAction=newAction, Arm=Arm, threshold=0.3)
         reward += goalPotenitalFunction
 
+        print("New Action=",newAction)
+        print("Reward after goal=",reward)
         return reward
 
     def resetExperiment(self):
-        self.state_history = [GOAL]
-        self.action_history = [GOAL]
+        self.state_history = [START]
+        self.action_history = [START]
         self.reward_history = [0]
 
     def storeTransition(self, newState, newAction, newReward):
@@ -98,7 +104,6 @@ class policyGradientAlgorithm:
 
     def print(self):
         print("XXXXXXXXXXXXXXX")
-        print("Network summary")
         self.network.summary()
         print("XXXXXXXXXXXXXXX")
 
@@ -117,9 +122,10 @@ class policyGradientAlgorithm:
 
     def computePolicy(self, action, state, discountedReward):
         probDist = distributions.MultivariateNormalFullCovariance(loc=state, covariance_matrix=[[1,0],[0,1]])
-        logPdf = tf.math.log(probDist.prob(action))
-    
-        return discountedReward*logPdf
+        #logPdf = tf.math.log(probDist.prob(action))
+
+        #discounted reward has nothing to do with the actual parameters in the network, this needs to be tuned.
+        return discountedReward
 
 
 def trainNetwork(pgAlgo, epochs, iterations, Arm):
@@ -133,24 +139,9 @@ def trainNetwork(pgAlgo, epochs, iterations, Arm):
 
                 policy_val = pgAlgo.computePolicy(newState, newAction, newReward)
                 grads = tape.gradient(policy_val, pgAlgo.network.trainable_variables)
-                adam = Adam(learning_rate=pgAlgo.learning_rate)
-                adam.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
-        '''
-        pgAlgo.computeDiscountedReward()
-        stateHistory = pgAlgo.getStateHistory()
-        actionHistory = pgAlgo.getActionHistory()
-        discountedRewardsHistory = pgAlgo.getDiscountedRewardHistory().numpy()
+                gradDesc = tf.keras.optimizers.SGD(learning_rate=pgAlgo.learning_rate)
+                gradDesc.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
 
-       
-        for k in range(len(stateHistory)):
-            state = stateHistory[k]
-            action = actionHistory[k]
-            discountedRewardsHistory = discountedRewardsHistory[k]
-            policy_val = pgAlgo.computePolicy(state, action, discountedRewardsHistory)
-            grads = tape.gradient(policy_val, pgAlgo.network.trainable_variables)
-            adam = Adam(learning_rate=pgAlgo.learning_rate)
-            adam.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
-        '''
         pgAlgo.resetExperiment()
 
 
@@ -184,22 +175,18 @@ def main():
     pgAlgo = policyGradientAlgorithm()
 
 
-    trainNetwork(pgAlgo, epochs=10, iterations=200, Arm=Arm)
+    trainNetwork(pgAlgo, epochs=5, iterations=10, Arm=Arm)
     pgAlgo.print()
 
 
-    testNetwork(pgAlgo, steps=100, Arm=Arm)
+    testNetwork(pgAlgo, steps=10, Arm=Arm)
+
+
+def main2():
+    Arm = NLinkArm(LINK_LENGTH, [0,0])
+    visualize_spaces(Arm, START, OBSTACLES)
+    
 
 
 if __name__ == "__main__":
     main()
-
-
-'''roadmap = {(1.0,0.0):None,
-            (1.1, 0.0):(1.0,0.0),
-            (1.2, 0.0):(1.1, 0.0),
-            (1.3, 0.0):(1.2, 0.0)}
-
-route = [(1.0,0.0),(1.1,0.0),(1.2,0.0),(1.3,0.0)]
-
-animate(Arm, roadmap, route, START, OBSTACLES)'''
