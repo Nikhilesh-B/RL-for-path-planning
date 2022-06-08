@@ -5,7 +5,6 @@ from keras.optimizer_v2.adam import Adam
 from nlinkarm import NLinkArm
 from helper import visualize_spaces, animate, detect_collision
 from pprint import pprint
-import numpy as np
 from constants import OBSTACLES, START, GOAL, LINK_LENGTH
 from tensorflow_probability import distributions
 
@@ -14,7 +13,7 @@ tfd = distributions
 
 class policyGradientAlgorithm:
     def __init__(self, learning_rate=0.001, gamma=0.003, horizon=4, 
-                inputLayer_dims=2, fc1_dims=10, fc2_dims=10, output_dims=2):
+                inputLayer_dims=2, fc1_dims=2, fc2_dims=10, output_dims=2):
         self.gamma = gamma
         self.horizon = horizon
         self.fc1_dims = fc1_dims
@@ -31,7 +30,6 @@ class policyGradientAlgorithm:
         self.network = keras.models.Sequential([
             self.inputLayer, 
             self.fc1,
-            self.fc2, 
             self.output
         ])
 
@@ -43,44 +41,77 @@ class policyGradientAlgorithm:
     def getPrevAction(self):
         return [self.action_history[-1]]
     
-    def getNextAction(self, newState):
+    @staticmethod
+    def getNextAction(newState):
         mu = newState[0]
-        sigma = [[1,0],[0,1]]
+        sigma = [[1, 0], [0, 1]]
         actionDist = tfd.MultivariateNormalFullCovariance(loc=mu, covariance_matrix=sigma)
-        nextAction, logProb = actionDist.experimental_sample_and_log_prob()
-        return nextAction
+        nextAction, logPdf = actionDist.experimental_sample_and_log_prob()
+        return nextAction, logPdf
 
-    def closeToGoal(self, newAction, Arm, threshold):
-        theta0 = newAction[0]
-        theta1 = newAction[1]
+    def detect_collision(self, arm, config, obstacles):
+        """
+        :param obstacles: circular obstacles list of lists
+        :param arm: NLinkArm object
+        :param config: Configuration (joint angles) of the arm
+        :return: True if any part of arm collides with obstacles, False otherwise
+        """
+        # here we have all this numpy associated stuff that may need to be converted to TF
+        arm.update_joints(config)
+        points = arm.points
+        for k in range(len(points) - 1):
+            for circle in obstacles:
+                a_vec = tf.Variable(points[k])
+                b_vec = tf.Variable(points[k + 1])
+                c_vec = tf.Variable([circle[0], circle[1]])
+                radius = circle[2]
+
+                line_vec = b_vec - a_vec
+                line_mag = tf.norm(line_vec)
+                circle_vec = c_vec - a_vec
+                proj = (1/line_mag)*tf.tensordot(circle_vec, line_vec)
+
+                if proj <= 0:
+                    closest_point = a_vec
+                elif proj >= line_mag:
+                    closest_point = b_vec
+                else:
+                    closest_point = a_vec + line_vec * proj / line_mag
+
+                if tf.norm(closest_point - c_vec) <= radius:
+                    return True
+
+        return False
+
+    @staticmethod
+    def closeToGoal(newAction, Arm, threshold):
+        theta0 = newAction[0][0]
+        theta1 = newAction[0][1]
 
         link1_length, link2_length = Arm.link_lengths[0], Arm.link_lengths[1]
 
-        x_joint1, y_joint1 = link1_length*np.cos(theta0), link1_length*np.sin(theta0)
-        x_joint2, y_joint2 = x_joint1+link2_length*np.cos(theta1), y_joint1+link2_length*np.sin(theta1)
+        x_joint1, y_joint1 = link1_length*tf.math.cos(theta0), link1_length*tf.math.sin(theta0)
+        x_joint2, y_joint2 = x_joint1+link2_length*tf.math.cos(theta1), y_joint1+link2_length*tf.math.sin(theta1)
 
-        endEffectorPosition = np.array([x_joint2, y_joint2])
+        endEffectorPosition = tf.concat([x_joint2, y_joint2], axis=0)
 
-        '''goalPotentialFunction  = tfd.MultivariateNormalFullCovariance(loc=GOAL, covariance_matrix=[[10,0],[0,10]])'''
+        g = tf.Variable(GOAL)
+        goalPotentialFunction = 10000/(1+tf.norm(endEffectorPosition-g))
 
-        goalPotentialFunction = 10000/(1+np.linalg.norm(endEffectorPosition-GOAL))
-
-        isCloseToGoal = (np.linalg.norm(endEffectorPosition-GOAL) <= threshold)
+        isCloseToGoal = (tf.norm(endEffectorPosition-g) <= threshold)
 
         return goalPotentialFunction, isCloseToGoal
 
     def getNextReward(self, newAction, Arm):
         reward = 0
-        print("Reward after initialization=",reward)
-        if detect_collision(arm=Arm, config=newAction, OBSTACLES=OBSTACLES):
+
+        if self.detect_collision(arm=Arm, config=newAction, obstacles=OBSTACLES):
             reward -= 1000
 
-        print("Reward before goal=",reward)
-        goalPotenitalFunction, isCloseToGoal = self.closeToGoal(newAction=newAction, Arm=Arm, threshold=0.3)
-        reward += goalPotenitalFunction
+        goalPotentialFunction, isCloseToGoal = self.closeToGoal(newAction=newAction, Arm=Arm, threshold=0.3)
+        reward += goalPotentialFunction
 
-        print("New Action=",newAction)
-        print("Reward after goal=",reward)
+        reward  = tf.Variable(reward)
         return reward
 
     def resetExperiment(self):
@@ -103,9 +134,9 @@ class policyGradientAlgorithm:
         return self.discountedRewardHistory
 
     def print(self):
-        print("XXXXXXXXXXXXXXX")
+        print(" XXXXXXXXXXXXXXX ")
         self.network.summary()
-        print("XXXXXXXXXXXXXXX")
+        print(" XXXXXXXXXXXXXXX ")
 
     def computeDiscountedReward(self):
         self.discountedRewardHistory = [0]*len(self.state_history)
@@ -120,12 +151,9 @@ class policyGradientAlgorithm:
 
         return self.discountedRewardHistory
 
-    def computePolicy(self, action, state, discountedReward):
-        probDist = distributions.MultivariateNormalFullCovariance(loc=state, covariance_matrix=[[1,0],[0,1]])
-        #logPdf = tf.math.log(probDist.prob(action))
-
-        #discounted reward has nothing to do with the actual parameters in the network, this needs to be tuned.
-        return discountedReward
+    @staticmethod
+    def computePolicy(reward, logPdf):
+        return -1*reward*logPdf
 
 
 def trainNetwork(pgAlgo, epochs, iterations, Arm):
@@ -134,10 +162,10 @@ def trainNetwork(pgAlgo, epochs, iterations, Arm):
             with tf.GradientTape() as tape:
                 prevAction = pgAlgo.getPrevAction()
                 newState = pgAlgo.network(tf.convert_to_tensor(prevAction))
-                newAction = pgAlgo.getNextAction(newState)
-                newReward = pgAlgo.getNextReward(newAction, Arm)
+                newAction, logPdf = pgAlgo.getNextAction(newState)
+                newReward = pgAlgo.getNextReward(newState, Arm)
 
-                policy_val = pgAlgo.computePolicy(newState, newAction, newReward)
+                policy_val = pgAlgo.computePolicy(newReward, logPdf)
                 grads = tape.gradient(policy_val, pgAlgo.network.trainable_variables)
                 gradDesc = tf.keras.optimizers.SGD(learning_rate=pgAlgo.learning_rate)
                 gradDesc.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
@@ -170,22 +198,19 @@ def testNetwork(pgAlgo, steps, Arm):
 
 def main():
     Arm = NLinkArm(LINK_LENGTH, [0,0])
-    visualize_spaces(Arm, START, OBSTACLES)
+    #visualize_spaces(Arm, START, OBSTACLES)
     
     pgAlgo = policyGradientAlgorithm()
 
-
-    trainNetwork(pgAlgo, epochs=5, iterations=10, Arm=Arm)
+    trainNetwork(pgAlgo, epochs=1, iterations=10, Arm=Arm)
     pgAlgo.print()
 
-
-    testNetwork(pgAlgo, steps=10, Arm=Arm)
+    #testNetwork(pgAlgo, steps=10, Arm=Arm)
 
 
 def main2():
     Arm = NLinkArm(LINK_LENGTH, [0,0])
     visualize_spaces(Arm, START, OBSTACLES)
-    
 
 
 if __name__ == "__main__":

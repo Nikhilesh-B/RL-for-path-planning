@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 """
 Utility functions
 """
@@ -11,6 +12,7 @@ def detect_collision(arm, config, OBSTACLES):
     :param config: Configuration (joint angles) of the arm
     :return: True if any part of arm collides with obstacles, False otherwise
     """
+    #here we have all this numpy associated stuff that may need to be converted to TF
     arm.update_joints(config)
     points = arm.points
     for k in range(len(points) - 1):
