@@ -10,8 +10,7 @@ from robotEnv import robotEnv
 tfd=distributions
 
 class policyGradientAlgorithm():
-    def __init__(self, robot_environment, robot_arm, learning_rate=0.001, gamma=0.003, horizon=4, inputLayer_dims=2, fc1_dims=1, fc2_dims=1,
-                 output_dims=1):
+    def __init__(self, robot_environment, robot_arm, learning_rate=0.001, gamma=0.003, horizon=4, inputLayer_dims=2, fc1_dims=2, fc2_dims=1, output_dims=2):
         self.gamma = gamma
         self.horizon = horizon
         self.fc1_dims = fc1_dims
@@ -161,8 +160,8 @@ def trainNetwork(pgAlgo, epochs, iterations, Arm):
                 newAction, logPdf = pgAlgo.getNextAction(newState)
                 newReward = pgAlgo.getNextReward(newAction)
                 pgAlgo.storeTransition(newState=newState, newAction=newAction, newReward=newReward)
-
                 policy_val = pgAlgo.computePolicy(newReward, logPdf)
+                print("Policy val",policy_val)
                 grads = tape.gradient(policy_val, pgAlgo.network.trainable_variables)
                 gradDesc = tf.keras.optimizers.SGD(learning_rate=pgAlgo.learning_rate)
                 gradDesc.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
