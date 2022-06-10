@@ -64,7 +64,6 @@ class policyGradientAlgorithm():
         arm.update_joints(config)
         points = arm.points
         for k in range(len(points) - 1):
-            print("Obstacles=",obstacles)
             for circle in obstacles:
                 a_vec = tf.constant(points[k])
                 b_vec = tf.constant(points[k + 1])
@@ -89,7 +88,6 @@ class policyGradientAlgorithm():
         return False
 
     def closeToGoal(self, newAction, threshold):
-        print("New action=",newAction)
         theta0 = newAction[0]
         theta1 = newAction[1]
 
@@ -150,14 +148,14 @@ class policyGradientAlgorithm():
 
     @staticmethod
     def computePolicy(reward, logPdf):
-        return reward * logPdf
+        policy_val = tf.reshape(reward*logPdf,shape=(1,1))
+        return policy_val
 
 
 def trainNetwork(pgAlgo, epochs, iterations, Arm):
     for i in range(epochs):
         for j in range(iterations):
             prevAction = pgAlgo.getPrevAction()
-            print("Here is the previous action that goes into the input = ",prevAction)
             with tf.GradientTape() as tape:
                 newState = pgAlgo.network.call(prevAction)
                 newAction, logPdf = pgAlgo.getNextAction(newState)
