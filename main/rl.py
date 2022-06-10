@@ -5,8 +5,9 @@ from constants import OBSTACLES, START, GOAL, LINK_LENGTH
 from tensorflow_probability import distributions
 from keras.layers import Dense, InputLayer
 from tensorflow import keras
-from tensorflow_probability import distributions
 from robotEnv import robotEnv
+
+tfd=distributions
 
 class policyGradientAlgorithm():
     def __init__(self, robot_environment, robot_arm, learning_rate=0.001, gamma=0.003, horizon=4, inputLayer_dims=2, fc1_dims=1, fc2_dims=1,
@@ -32,7 +33,7 @@ class policyGradientAlgorithm():
 
 
     def constructNN(self):
-        self.inputLayer = InputLayer(input_shape=(self.inputLayer_dims, ))
+        self.inputLayer = InputLayer(input_shape=(1,2))
         self.fc1 = Dense(units=self.fc1_dims, activation='relu')
         self.output = Dense(units=self.output_dims, activation='relu')
 
@@ -42,16 +43,14 @@ class policyGradientAlgorithm():
             self.output
         ])
 
-        print("START=", self.robot_environment.start)
-        print("START type=", type(self.robot_environment.start))
-
         self.state_history = [self.robot_environment.start]
         self.action_history = [self.robot_environment.start]
         self.reward_history = [0]
         self.discountedRewardHistory = None
 
     def getPrevAction(self):
-        return [self.action_history[-1]]
+        prevAction = tf.reshape(self.action_history[-1], [1,2])
+        return prevAction
 
     @staticmethod
     def getNextAction(newState):
@@ -62,13 +61,6 @@ class policyGradientAlgorithm():
         return nextAction, logPdf
 
     def detect_collision(self, arm, config, obstacles):
-        """
-        :param obstacles: circular obstacles list of lists
-        :param arm: NLinkArm object
-        :param config: Configuration (joint angles) of the arm
-        :return: True if any part of arm collides with obstacles, False otherwise
-        """
-        # here we have all this numpy associated stuff that may need to be converted to TF
         arm.update_joints(config)
         points = arm.points
         for k in range(len(points) - 1):
@@ -160,16 +152,14 @@ class policyGradientAlgorithm():
         return reward * logPdf
 
 
-tfd = distributions
 def trainNetwork(pgAlgo, epochs, iterations, Arm):
     for i in range(epochs):
         for j in range(iterations):
-            prevAction = pgAlgo.getPrevAction()[0]
-            print("prevAction=",prevAction)
-            print("Type of prevAction=",type(prevAction))
+            prevAction = pgAlgo.getPrevAction()
+            print("Here is the previous action that goes into the input = ",prevAction)
             with tf.GradientTape() as tape:
-                newState = pgAlgo.network(prevAction)
-                newAction, logPdf = pgAlgo.getNextAction([newState])
+                newState = pgAlgo.network.call(prevAction)
+                newAction, logPdf = pgAlgo.getNextAction(newState)
                 newReward = pgAlgo.getNextReward(newState, Arm)
                 pgAlgo.storeTransition(newState=newState, newAction=newAction, newReward=newReward)
 
@@ -179,6 +169,7 @@ def trainNetwork(pgAlgo, epochs, iterations, Arm):
                 gradDesc.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
 
         pgAlgo.resetExperiment()
+
 
 def testNetwork(pgAlgo, steps, arm, robot_environment):
     s = tuple(robot_environment.start)
@@ -216,7 +207,6 @@ def main():
     trainNetwork(pgAlgo, epochs=1, iterations=10, Arm=arm)
     pgAlgo.print()
 
-    #testNetwork(pgAlgo, steps=10, Arm=Arm)
 
 if __name__ == "__main__":
     main()
