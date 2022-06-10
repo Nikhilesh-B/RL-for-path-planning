@@ -64,6 +64,7 @@ class policyGradientAlgorithm():
         arm.update_joints(config)
         points = arm.points
         for k in range(len(points) - 1):
+            print("Obstacles=",obstacles)
             for circle in obstacles:
                 a_vec = tf.constant(points[k])
                 b_vec = tf.constant(points[k + 1])
@@ -87,10 +88,10 @@ class policyGradientAlgorithm():
 
         return False
 
-    @staticmethod
     def closeToGoal(self, newAction, threshold):
-        theta0 = newAction[0][0]
-        theta1 = newAction[0][1]
+        print("New action=",newAction)
+        theta0 = newAction[0]
+        theta1 = newAction[1]
 
         link1_length, link2_length = self.robot_arm.link_lengths[0], self.robot_arm.link_lengths[1]
 
@@ -110,7 +111,7 @@ class policyGradientAlgorithm():
     def getNextReward(self, newAction):
         reward = 0
 
-        if self.detect_collision(arm=self.robot_arm, config=newAction, obstacles=self.robot_enviromment.obstacles):
+        if self.detect_collision(arm=self.robot_arm, config=newAction, obstacles=self.robot_environment.obstacles):
             reward -= 1000
 
         goalPotentialFunction, isCloseToGoal = self.closeToGoal(newAction=newAction, threshold=0.3)
@@ -160,7 +161,7 @@ def trainNetwork(pgAlgo, epochs, iterations, Arm):
             with tf.GradientTape() as tape:
                 newState = pgAlgo.network.call(prevAction)
                 newAction, logPdf = pgAlgo.getNextAction(newState)
-                newReward = pgAlgo.getNextReward(newState, Arm)
+                newReward = pgAlgo.getNextReward(newAction)
                 pgAlgo.storeTransition(newState=newState, newAction=newAction, newReward=newReward)
 
                 policy_val = pgAlgo.computePolicy(newReward, logPdf)
@@ -196,7 +197,7 @@ def testNetwork(pgAlgo, steps, arm, robot_environment):
 
 def main():
     arm = NLinkArm(LINK_LENGTH, [0,0])
-    robot_environment = robotEnv(obstacles=tf.constant([[]]),
+    robot_environment = robotEnv(obstacles= tf.reshape(tf.convert_to_tensor(()), (0, 3)),
                                       start=tf.constant([1, 0]),
                                       goal=tf.constant([2.16, 3.36]),
                                       link_length=tf.constant([2, 2]))
