@@ -1,19 +1,16 @@
 import tensorflow as tf
-from keras.layers import Dense, InputLayer, Dropout
-from tensorflow import keras
-from keras.optimizer_v2.adam import Adam
 from nlinkarm import NLinkArm
 from helper import visualize_spaces, animate, detect_collision
-from pprint import pprint
 from constants import OBSTACLES, START, GOAL, LINK_LENGTH
 from tensorflow_probability import distributions
+from keras.layers import Dense, InputLayer
+from tensorflow import keras
+from tensorflow_probability import distributions
+from robotEnv import robotEnv
 
-tfd = distributions
-
-
-class policyGradientAlgorithm:
-    def __init__(self, learning_rate=0.001, gamma=0.003, horizon=4, 
-                inputLayer_dims=2, fc1_dims=2, fc2_dims=10, output_dims=2):
+class policyGradientAlgorithm():
+    def __init__(self, robot_environment, robot_arm, learning_rate=0.001, gamma=0.003, horizon=4, inputLayer_dims=2, fc1_dims=1, fc2_dims=1,
+                 output_dims=1):
         self.gamma = gamma
         self.horizon = horizon
         self.fc1_dims = fc1_dims
@@ -21,26 +18,41 @@ class policyGradientAlgorithm:
         self.inputLayer_dims = inputLayer_dims
         self.output_dims = output_dims
         self.learning_rate = learning_rate
+        self.robot_environment = robot_environment
+        self.robot_arm = robot_arm
+        self.discountedRewardHistory = None
+        self.reward_history = None
+        self.action_history = None
+        self.state_history = None
+        self.network = None
+        self.output = None
+        self.fc2 = None
+        self.fc1 = None
+        self.inputLayer = None
 
-        self.inputLayer = InputLayer(input_shape=(self.inputLayer_dims,))
-        self.fc1 = Dense(self.fc1_dims, activation='relu')
-        self.fc2 = Dense(self.fc2_dims, activation='relu')
-        self.output = Dense(self.output_dims, activation='relu')
+
+    def constructNN(self):
+        self.inputLayer = InputLayer(input_shape=(self.inputLayer_dims, ))
+        self.fc1 = Dense(units=self.fc1_dims, activation='relu')
+        self.output = Dense(units=self.output_dims, activation='relu')
 
         self.network = keras.models.Sequential([
-            self.inputLayer, 
+            self.inputLayer,
             self.fc1,
             self.output
         ])
 
-        self.state_history = [START]
-        self.action_history = [START]
-        self.reward_history = [0] 
+        print("START=", self.robot_environment.start)
+        print("START type=", type(self.robot_environment.start))
+
+        self.state_history = [self.robot_environment.start]
+        self.action_history = [self.robot_environment.start]
+        self.reward_history = [0]
         self.discountedRewardHistory = None
 
     def getPrevAction(self):
         return [self.action_history[-1]]
-    
+
     @staticmethod
     def getNextAction(newState):
         mu = newState[0]
@@ -61,15 +73,15 @@ class policyGradientAlgorithm:
         points = arm.points
         for k in range(len(points) - 1):
             for circle in obstacles:
-                a_vec = tf.Variable(points[k])
-                b_vec = tf.Variable(points[k + 1])
-                c_vec = tf.Variable([circle[0], circle[1]])
+                a_vec = tf.constant(points[k])
+                b_vec = tf.constant(points[k + 1])
+                c_vec = tf.constant([circle[0], circle[1]])
                 radius = circle[2]
 
                 line_vec = b_vec - a_vec
                 line_mag = tf.norm(line_vec)
                 circle_vec = c_vec - a_vec
-                proj = (1/line_mag)*tf.tensordot(circle_vec, line_vec)
+                proj = (1 / line_mag) * tf.tensordot(circle_vec, line_vec)
 
                 if proj <= 0:
                     closest_point = a_vec
@@ -84,39 +96,40 @@ class policyGradientAlgorithm:
         return False
 
     @staticmethod
-    def closeToGoal(newAction, Arm, threshold):
+    def closeToGoal(self, newAction, threshold):
         theta0 = newAction[0][0]
         theta1 = newAction[0][1]
 
-        link1_length, link2_length = Arm.link_lengths[0], Arm.link_lengths[1]
+        link1_length, link2_length = self.robot_arm.link_lengths[0], self.robot_arm.link_lengths[1]
 
-        x_joint1, y_joint1 = link1_length*tf.math.cos(theta0), link1_length*tf.math.sin(theta0)
-        x_joint2, y_joint2 = x_joint1+link2_length*tf.math.cos(theta1), y_joint1+link2_length*tf.math.sin(theta1)
+        x_joint1, y_joint1 = link1_length * tf.math.cos(theta0), link1_length * tf.math.sin(theta0)
+        x_joint2, y_joint2 = x_joint1 + link2_length * tf.math.cos(theta1), y_joint1 + link2_length * tf.math.sin(theta1)
 
         endEffectorPosition = tf.concat([x_joint2, y_joint2], axis=0)
 
-        g = tf.Variable(GOAL)
-        goalPotentialFunction = 10000/(1+tf.norm(endEffectorPosition-g))
+        g = self.robot_environment.goal
+        goalFunction = tfd.MultivariateNormalFullCovariance(loc=endEffectorPosition, covariance_matrix=[[1, 0], [0, 1]])
+        goalPotentialFunctionValue = 1000 * goalFunction.prob(newAction)
 
-        isCloseToGoal = (tf.norm(endEffectorPosition-g) <= threshold)
+        isCloseToGoal = (tf.norm(endEffectorPosition - g) <= threshold)
 
-        return goalPotentialFunction, isCloseToGoal
+        return goalPotentialFunctionValue, isCloseToGoal
 
-    def getNextReward(self, newAction, Arm):
+    def getNextReward(self, newAction):
         reward = 0
 
-        if self.detect_collision(arm=Arm, config=newAction, obstacles=OBSTACLES):
+        if self.detect_collision(arm=self.robot_arm, config=newAction, obstacles=self.robot_enviromment.obstacles):
             reward -= 1000
 
-        goalPotentialFunction, isCloseToGoal = self.closeToGoal(newAction=newAction, Arm=Arm, threshold=0.3)
+        goalPotentialFunction, isCloseToGoal = self.closeToGoal(newAction=newAction, threshold=0.3)
         reward += goalPotentialFunction
 
-        reward  = tf.Variable(reward)
+        reward = tf.constant(reward)
         return reward
 
     def resetExperiment(self):
-        self.state_history = [START]
-        self.action_history = [START]
+        self.state_history = [self.robot_environment.start]
+        self.action_history = [self.robot_environment.start]
         self.reward_history = [0]
 
     def storeTransition(self, newState, newAction, newReward):
@@ -124,27 +137,18 @@ class policyGradientAlgorithm:
         self.action_history.append(newAction)
         self.reward_history.append(newReward)
 
-    def getStateHistory(self):
-        return self.state_history
-
-    def getActionHistory(self):
-        return self.action_history
-
-    def getDiscountedRewardHistory(self):
-        return self.discountedRewardHistory
-
     def print(self):
         print(" XXXXXXXXXXXXXXX ")
         self.network.summary()
         print(" XXXXXXXXXXXXXXX ")
 
     def computeDiscountedReward(self):
-        self.discountedRewardHistory = [0]*len(self.state_history)
+        self.discountedRewardHistory = [0] * len(self.state_history)
         for k in range(0, len(self.reward_history)):
             val = 0
             for t in range(k, len(self.reward_history)):
-                val += self.reward_history[t]*(self.gamma ** (t - k))
-            
+                val += self.reward_history[t] * (self.gamma ** (t - k))
+
             self.discountedRewardHistory[k] = val
 
         self.discountedRewardHistory = tf.convert_to_tensor(self.discountedRewardHistory)
@@ -153,17 +157,21 @@ class policyGradientAlgorithm:
 
     @staticmethod
     def computePolicy(reward, logPdf):
-        return -1*reward*logPdf
+        return reward * logPdf
 
 
+tfd = distributions
 def trainNetwork(pgAlgo, epochs, iterations, Arm):
     for i in range(epochs):
         for j in range(iterations):
+            prevAction = pgAlgo.getPrevAction()[0]
+            print("prevAction=",prevAction)
+            print("Type of prevAction=",type(prevAction))
             with tf.GradientTape() as tape:
-                prevAction = pgAlgo.getPrevAction()
-                newState = pgAlgo.network(tf.convert_to_tensor(prevAction))
-                newAction, logPdf = pgAlgo.getNextAction(newState)
+                newState = pgAlgo.network(prevAction)
+                newAction, logPdf = pgAlgo.getNextAction([newState])
                 newReward = pgAlgo.getNextReward(newState, Arm)
+                pgAlgo.storeTransition(newState=newState, newAction=newAction, newReward=newReward)
 
                 policy_val = pgAlgo.computePolicy(newReward, logPdf)
                 grads = tape.gradient(policy_val, pgAlgo.network.trainable_variables)
@@ -172,10 +180,9 @@ def trainNetwork(pgAlgo, epochs, iterations, Arm):
 
         pgAlgo.resetExperiment()
 
-
-def testNetwork(pgAlgo, steps, Arm):
-    s = tuple(START)
-    g = tuple(GOAL)
+def testNetwork(pgAlgo, steps, arm, robot_environment):
+    s = tuple(robot_environment.start)
+    g = tuple(robot_environment.goal)
 
     route = [s]
     roadmap = {s:None}
@@ -188,30 +195,28 @@ def testNetwork(pgAlgo, steps, Arm):
         route.append(n)
         roadmap[n] = p
 
-        goalPotentialFunctionValue, isCloseToGoal = pgAlgo.closeToGoal(Arm=Arm, newAction=nextPosition[0], threshold=0.1)
+        goalPotentialFunctionValue, isCloseToGoal = pgAlgo.closeToGoal(newAction=nextPosition[0], threshold=0.1)
 
         if isCloseToGoal:
             break
 
-    animate(Arm, roadmap, route, START, OBSTACLES)
+    animate(arm, roadmap, route, pgAlgo.robot_environment.start, pgAlgo.robot_environment.obstacles)
 
 
 def main():
-    Arm = NLinkArm(LINK_LENGTH, [0,0])
-    #visualize_spaces(Arm, START, OBSTACLES)
-    
-    pgAlgo = policyGradientAlgorithm()
+    arm = NLinkArm(LINK_LENGTH, [0,0])
+    robot_environment = robotEnv(obstacles=tf.constant([[]]),
+                                      start=tf.constant([1, 0]),
+                                      goal=tf.constant([2.16, 3.36]),
+                                      link_length=tf.constant([2, 2]))
 
-    trainNetwork(pgAlgo, epochs=1, iterations=10, Arm=Arm)
+    pgAlgo = policyGradientAlgorithm(robot_environment=robot_environment,robot_arm=arm)
+    pgAlgo.constructNN()
+
+    trainNetwork(pgAlgo, epochs=1, iterations=10, Arm=arm)
     pgAlgo.print()
 
     #testNetwork(pgAlgo, steps=10, Arm=Arm)
-
-
-def main2():
-    Arm = NLinkArm(LINK_LENGTH, [0,0])
-    visualize_spaces(Arm, START, OBSTACLES)
-
 
 if __name__ == "__main__":
     main()
