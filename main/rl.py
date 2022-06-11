@@ -97,10 +97,15 @@ class policyGradientAlgorithm():
 
         endEffectorPosition = tf.concat([x_joint2, y_joint2], axis=0)
 
-        g = self.robot_environment.goal
-        goalFunction = tfd.MultivariateNormalFullCovariance(loc=endEffectorPosition, covariance_matrix=[[1, 0], [0, 1]])
-        goalPotentialFunctionValue = 1000 * goalFunction.prob(newAction)
 
+        g = self.robot_environment.goal
+        goalFunction = 1/(1+tf.math.square(tf.norm(endEffectorPosition-g)))
+        goalPotentialFunctionValue = 1000*goalFunction
+
+        print("Goal potential function value=",goalPotentialFunctionValue)
+
+        ##tf.norm(newAction) produces a correct code wise result even for the the gradient vectors
+        goalPotentialFunctionValue = tf.norm(newAction)
         isCloseToGoal = (tf.norm(endEffectorPosition - g) <= threshold)
 
         return goalPotentialFunctionValue, isCloseToGoal
