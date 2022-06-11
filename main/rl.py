@@ -88,7 +88,20 @@ class policyGradientAlgorithm():
 
         return False
 
-    def closeToGoal(self, newAction, threshold, endEffectorPosition, goal):
+    def closeToGoal(self, newAction, threshold):
+        theta0 = newAction[0]
+        theta1 = newAction[1]
+
+        goal = self.robot_environment.goal
+
+        link1_length, link2_length = self.robot_arm.link_lengths[0], self.robot_arm.link_lengths[1]
+
+        x_joint1, y_joint1 = link1_length * tf.math.cos(theta0), link1_length * tf.math.sin(theta0)
+        x_joint2, y_joint2 = x_joint1 + link2_length * tf.math.cos(
+            theta1), y_joint1 + link2_length * tf.math.sin(theta1)
+
+        endEffectorPosition = tf.stack(values=[[x_joint2], [y_joint2]], axis=0)
+
         goalFunction = 1/(1+tf.math.square(tf.norm(endEffectorPosition-goal)))
         goalPotentialFunctionValue = 1000*goalFunction
 
@@ -99,13 +112,13 @@ class policyGradientAlgorithm():
 
         return goalPotentialFunctionValue, isCloseToGoal
 
-    def getNextReward(self, newAction, endEffectorPosition, goal):
+    def getNextReward(self, newAction):
         reward = 0
 
         if self.detect_collision(arm=self.robot_arm, config=newAction, obstacles=self.robot_environment.obstacles):
             reward -= 1000
 
-        goalPotentialFunction, isCloseToGoal = self.closeToGoal(newAction=newAction, threshold=0.3, endEffectorPosition=endEffectorPosition, goal=goal)
+        goalPotentialFunction, isCloseToGoal = self.closeToGoal(newAction=newAction, threshold=0.3)
         reward += goalPotentialFunction
 
         reward = tf.constant(reward)
@@ -152,19 +165,8 @@ def trainNetwork(pgAlgo, epochs, iterations, Arm):
             with tf.GradientTape() as tape:
                 newState = pgAlgo.network.call(prevAction)
                 newAction, logPdf = pgAlgo.getNextAction(newState)
+                newReward = pgAlgo.getNextReward(newAction)
 
-                theta0 = newAction[0]
-                theta1 = newAction[1]
-
-                link1_length, link2_length = pgAlgo.robot_arm.link_lengths[0], pgAlgo.robot_arm.link_lengths[1]
-
-                x_joint1, y_joint1 = link1_length * tf.math.cos(theta0), link1_length * tf.math.sin(theta0)
-                x_joint2, y_joint2 = x_joint1 + link2_length * tf.math.cos(
-                    theta1), y_joint1 + link2_length * tf.math.sin(theta1)
-
-                endEffectorPosition = tf.stack(values=[[x_joint2], [y_joint2]], axis=0)
-
-                newReward = pgAlgo.getNextReward(newAction, endEffectorPosition, pgAlgo.robot_environment.goal)
                 pgAlgo.storeTransition(newState=newState, newAction=newAction, newReward=newReward)
                 policy_val = pgAlgo.computePolicy(newReward, logPdf)
                 print("Policy val",policy_val)
