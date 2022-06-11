@@ -6,11 +6,12 @@ from tensorflow_probability import distributions
 from keras.layers import Dense, InputLayer
 from tensorflow import keras
 from robotEnv import robotEnv
+from pprint import pprint
 
 tfd=distributions
 
 class policyGradientAlgorithm():
-    def __init__(self, robot_environment, robot_arm, learning_rate=0.001, gamma=0.003, horizon=4, inputLayer_dims=2, fc1_dims=128, fc2_dims=128, output_dims=2):
+    def __init__(self, robot_environment, robot_arm, learning_rate=0.001, gamma=0.003, horizon=4, inputLayer_dims=2, fc1_dims=1, fc2_dims=1, output_dims=2):
         self.gamma = gamma
         self.horizon = horizon
         self.fc1_dims = fc1_dims
@@ -40,7 +41,7 @@ class policyGradientAlgorithm():
         self.network = keras.models.Sequential([
             self.inputLayer,
             self.fc1,
-            self.fc2,
+            #self.fc2,
             self.output
         ])
 
@@ -55,10 +56,14 @@ class policyGradientAlgorithm():
 
     @staticmethod
     def getNextAction(newState):
+        #is the logPdf a function of the mu? at all or is not even?
         mu = newState[0]
         sigma = [[1, 0], [0, 1]]
         actionDist = tfd.MultivariateNormalFullCovariance(loc=mu, covariance_matrix=sigma)
         nextAction, logPdf = actionDist.experimental_sample_and_log_prob()
+
+        #the issue is that this newAction and the logProb of the draw is not at all a function of the original neural network
+        logPdf = tf.norm(mu)
         return nextAction, logPdf
 
     def detect_collision(self, arm, config, obstacles):
@@ -97,17 +102,13 @@ class policyGradientAlgorithm():
         link1_length, link2_length = self.robot_arm.link_lengths[0], self.robot_arm.link_lengths[1]
 
         x_joint1, y_joint1 = link1_length * tf.math.cos(theta0), link1_length * tf.math.sin(theta0)
-        x_joint2, y_joint2 = x_joint1 + link2_length * tf.math.cos(
-            theta1), y_joint1 + link2_length * tf.math.sin(theta1)
+        x_joint2, y_joint2 = x_joint1 + link2_length * tf.math.cos(theta1), y_joint1 + link2_length * tf.math.sin(theta1)
 
         endEffectorPosition = tf.stack(values=[[x_joint2], [y_joint2]], axis=0)
 
         goalFunction = 1/(1+tf.math.square(tf.norm(endEffectorPosition-goal)))
         goalPotentialFunctionValue = 1000*goalFunction
 
-        ##tf.norm(newAction) produces a correct code wise result even for the the gradient vectors
-        #goalPotentialFunctionValue = tf.norm(newAction)
-        #goalPotentialFunctionValue = 1000*goalPotentialFunctionValue
         isCloseToGoal = (tf.norm(endEffectorPosition - goal) <= threshold)
 
         return goalPotentialFunctionValue, isCloseToGoal
@@ -154,7 +155,9 @@ class policyGradientAlgorithm():
 
     @staticmethod
     def computePolicy(reward, logPdf):
-        policy_val = tf.reshape(reward*logPdf,shape=(1,1))
+        #logPdf has no valid gradients that can be applied
+        #eward has all the gradients evaluate to nones.
+        policy_val = tf.reshape(-logPdf,shape=(1,1))
         return policy_val
 
 
@@ -165,32 +168,42 @@ def trainNetwork(pgAlgo, epochs, iterations, Arm):
             with tf.GradientTape() as tape:
                 newState = pgAlgo.network.call(prevAction)
                 newAction, logPdf = pgAlgo.getNextAction(newState)
-                newReward = pgAlgo.getNextReward(newAction)
 
+                print("Here are the values of the weights in the network")
+                pprint(pgAlgo.network.get_weights())
+                pprint("Hey here's the new state=")
+                pprint(newState)
+                pprint("Hey here's the new action=")
+                pprint(newAction)
+                newReward = pgAlgo.getNextReward(newAction)
+                pprint("Here's the associated reward=")
+                pprint(newReward)
                 pgAlgo.storeTransition(newState=newState, newAction=newAction, newReward=newReward)
                 policy_val = pgAlgo.computePolicy(newReward, logPdf)
-                print("Policy val",policy_val)
+                pprint("Here's the new policy value=")
+                pprint(policy_val)
+                #the gradients somehow all evaluate to zero so what's the issue here
                 grads = tape.gradient(policy_val, pgAlgo.network.trainable_variables)
+                pprint("Gradients=")
+                pprint(grads)
                 gradDesc = tf.keras.optimizers.SGD(learning_rate=pgAlgo.learning_rate)
                 gradDesc.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
 
         pgAlgo.resetExperiment()
 
 
-def testNetwork(pgAlgo, steps, arm, robot_environment):
-    s = tuple(robot_environment.start)
-    g = tuple(robot_environment.goal)
+def testNetwork(pgAlgo, steps, arm):
+    s = tuple(pgAlgo.robot_environment.start)
+    g = tuple(pgAlgo.robot_environment.goal)
 
     route = [s]
     roadmap = {s:None}
 
     for i in range(steps):
-        p = route[-1]
-        prevPosition = np.array([np.array(p)])
-        nextPosition = pgAlgo.network.predict(tf.convert_to_tensor(prevPosition))
-        n = tuple(nextPosition[0])
-        route.append(n)
-        roadmap[n] = p
+        prevPosition = route[-1]
+        nextPosition = pgAlgo.network(prevPosition)
+        route.append(nextPosition)
+        roadmap[nextPosition] = prevPosition
 
         goalPotentialFunctionValue, isCloseToGoal = pgAlgo.closeToGoal(newAction=nextPosition[0], threshold=0.1)
 
@@ -204,13 +217,14 @@ def main():
     arm = NLinkArm(LINK_LENGTH, [0,0])
     robot_environment = robotEnv(obstacles= tf.reshape(tf.convert_to_tensor(()), (0, 3)),
                                       start=tf.constant([1, 0]),
-                                      goal=tf.constant([2.16, 3.36]),
+                                      goal=tf.constant([0.0, 4.0]),
                                       link_length=tf.constant([2, 2]))
+    visualize_spaces(arm, [1, 0] , [[-4,-4,0.3]])
 
     pgAlgo = policyGradientAlgorithm(robot_environment=robot_environment,robot_arm=arm)
     pgAlgo.constructNN()
 
-    trainNetwork(pgAlgo, epochs=1, iterations=10, Arm=arm)
+    trainNetwork(pgAlgo, epochs=1, iterations=3, Arm=arm)
     pgAlgo.print()
 
 
