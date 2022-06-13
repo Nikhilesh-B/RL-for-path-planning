@@ -1,8 +1,7 @@
-import tensorflow as tf
 from nlinkarm import NLinkArm
 from helper import visualize_spaces, animate, detect_collision
 from constants import OBSTACLES, START, GOAL, LINK_LENGTH
-from tensorflow_probability import distributions
+from tensorflow_probability import distributions as tfd
 from keras.layers import Dense, InputLayer
 from tensorflow import keras
 from robotEnv import robotEnv
@@ -10,7 +9,6 @@ from pprint import pprint
 import math as m
 import tensorflow as tf
 
-tfd=distributions
 
 class policyGradientAlgorithm():
     def __init__(self, robot_environment, robot_arm, learning_rate=0.001, horizon=4, inputLayer_dims=2, fc1_dims=1, output_dims=2):
