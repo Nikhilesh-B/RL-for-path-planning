@@ -1,170 +1,176 @@
-import tensorflow as tf
-from keras.layers import Dense, InputLayer, Dropout
-from tensorflow import keras
-from keras.optimizer_v2.adam import Adam
 from nlinkarm import NLinkArm
-from helper import visualize_spaces, animate
-from pprint import pprint
-import numpy as np
+from helper import visualize_spaces, animate, detect_collision
 from constants import OBSTACLES, START, GOAL, LINK_LENGTH
-from tensorflow_probability import distributions
+from tensorflow_probability import distributions as tfd
+from keras.layers import Dense, InputLayer
+from tensorflow import keras
+from robotEnv import robotEnv
+from pprint import pprint
+import math as m
+import tensorflow as tf
 
-tfd = distributions
 
-
-class policyGradientAlgorithm:
-    def __init__(self, learning_rate=0.001 ,gamma=0.003, horizon=4, inputLayer_dims=2, fc1_dims=256, fc2_dims=256, output_dims=2):
-        self.gamma = gamma
+class policyGradientAlgorithm():
+    def __init__(self, robot_environment, robot_arm, learning_rate=0.001, horizon=4, inputLayer_dims=2, fc1_dims=1,fc2_dims=1, output_dims=2):
         self.horizon = horizon
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
         self.inputLayer_dims = inputLayer_dims
         self.output_dims = output_dims
         self.learning_rate = learning_rate
+        self.robot_environment = robot_environment
+        self.robot_arm = robot_arm
+        self.action_history = None
+        self.state_history = None
+        self.network = None
+        self.outputLayer = None
+        self.fc2 = None
+        self.fc1 = None
+        self.inputLayer = None
 
-        self.inputLayer = InputLayer(input_shape=(self.inputLayer_dims,))
-        self.fc1 = Dense(self.fc1_dims, activation='relu')
-        self.fc2 = Dense(self.fc2_dims, activation='relu')
-        self.output = Dense(self.output_dims, activation='relu')
+    def constructNN(self):
+        self.inputLayer = InputLayer(input_shape=(1,2))
+        self.fc1 = Dense(units=self.fc1_dims, activation='relu')
+        self.fc2 = Dense(units=self.fc2_dims, activation='relu')
+        self.outputLayer = Dense(units=self.output_dims, activation='relu')
 
         self.network = keras.models.Sequential([
-            self.inputLayer, 
+            self.inputLayer,
             self.fc1,
-            self.fc2, 
-            self.output
+            self.outputLayer
         ])
 
-        self.state_history = [GOAL] 
-        self.action_history = [GOAL] 
-        self.reward_history = [0] 
-        self.discountedRewardHistory = None
+        self.state_history = [self.robot_environment.start]
+        self.action_history = [self.robot_environment.start]
 
     def getPrevAction(self):
-        return [self.action_history[-1]]
-    
-    def getNextAction(self, newState):
-        mu = newState[0]
-        sigma = [[1,0],[0,1]]
-        actionDist = tfd.MultivariateNormalFullCovariance(loc=mu, covariance_matrix=sigma)
-        nextAction, logProb = actionDist.experimental_sample_and_log_prob()
-        return nextAction
+        prevAction = tf.reshape(self.action_history[-1], [1,2])
+        return prevAction
 
+    @staticmethod
+    def getNextAction(newState):
+        mu = newState[0]
+        sigma = [[1, 0], [0, 1]]
+        actionDist = tfd.MultivariateNormalFullCovariance(loc=mu, covariance_matrix=sigma)
+        nextAction, logPdf = actionDist.experimental_sample_and_log_prob()
+
+        logPdf = tf.norm(mu)
+        return nextAction, logPdf
+
+
+    def closeToGoal(self, newAction, threshold):
+        theta0 = newAction[0]
+        theta1 = newAction[1]
+
+        goal = self.robot_environment.goal
+
+        link1_length, link2_length = self.robot_arm.link_lengths[0], self.robot_arm.link_lengths[1]
+
+        x_joint1, y_joint1 = link1_length * tf.math.cos(theta0), link1_length * tf.math.sin(theta0)
+        x_joint2, y_joint2 = x_joint1 + link2_length * tf.math.cos(theta1), y_joint1 + link2_length * tf.math.sin(theta1)
+
+        endEffectorPosition = tf.stack(values=[[x_joint2], [y_joint2]], axis=0)
+
+        goalFunction = 1/(1+tf.math.square(tf.norm(endEffectorPosition-goal)))
+        goalPotentialFunctionValue = 1000*goalFunction
+
+        isCloseToGoal = (tf.norm(endEffectorPosition - goal) <= threshold)
+
+        return goalPotentialFunctionValue, isCloseToGoal
 
     def getNextReward(self, newAction):
-        reward = 0
-        for obst in OBSTACLES:
-            obstPotentialFunction = tfd.MultivariateNormalFullCovariance(loc=obst[:-1],covariance_matrix=[[1,0],[0,1]])
-            reward -= obstPotentialFunction.prob(newAction)
+        goalPotentialFunction, isCloseToGoal = self.closeToGoal(newAction=newAction, threshold=0.3)
+        reward = goalPotentialFunction
 
-        
-        goalPotentialFunction  = tfd.MultivariateNormalFullCovariance(loc=GOAL, covariance_matrix=[[1,0],[0,1]])
-        reward += goalPotentialFunction.prob(newAction)
-
+        reward = tf.constant(reward)
         return reward
 
     def resetExperiment(self):
-        self.state_history = [GOAL]
-        self.action_history = [GOAL]
+        self.state_history = [self.robot_environment.start]
+        self.action_history = [self.robot_environment.start]
         self.reward_history = [0]
-
 
     def storeTransition(self, newState, newAction, newReward):
         self.state_history.append(newState)
         self.action_history.append(newAction)
-        self.reward_history.append(newReward)
-
-
-    def getStateHistory(self):
-        return self.state_history
-
-    def getActionHistory(self):
-        return self.action_history
-
-    def getDiscountedRewardHistory(self):
-        return self.discountedRewardHistory
 
     def print(self):
-        print("---------------")
-        print("Action history", self.action_history)
-        print("XXXXXXXXXXXXXXX")
-        print("---------------")
-        print("State history", self.state_history)
-        print("XXXXXXXXXXXXXXXX")
+        print(" XXXXXXXXXXXXXXX NETWORK SUMMARY XXXXXXXXXXXXXXX ")
+        self.network.summary()
+        print(" XXXXXXXXXXXXXXX NETWORK SUMMARY XXXXXXXXXXXXXXX ")
+
+    def returnlogPDFVal(sigma, mean, sampleVal):
+        pi = tf.constant(m.pi)
+        pdf = tf.math.pow(tf.linalg.det(2 * pi * sigma), -1 / 2) * tf.math.exp(
+            -1 / 2 * tf.linalg.matmul(tf.linalg.matmul(mean - sampleVal, tf.linalg.inv(sigma)),
+                                      tf.transpose(mean - sampleVal)))
+        logPdf = tf.math.log(pdf)
+
+        return logPdf
+
+    @staticmethod
+    def computePolicy(newAction, newState):
+        pass
 
 
-
-    def computeDiscountedReward(self):
-        self.discountedRewardHistory = [0]*len(self.state_history)
-        for k in range(0, len(self.reward_history)):
-            val = 0
-            for t in range(k, len(self.reward_history)):
-                val += self.reward_history[t]*(self.gamma ** (t - k))
-            
-            self.discountedRewardHistory[k] = val
-
-        self.discountedRewardHistory = tf.convert_to_tensor(self.discountedRewardHistory)
-
-        return self.discountedRewardHistory
-
-    def computePolicy(self, action, state, discountedReward):
-        probDist = distributions.MultivariateNormalFullCovariance(loc=state, covariance_matrix=[[1,0],[0,1]])
-        logPdf = tf.math.log(probDist.prob(action))
-    
-        return discountedReward*logPdf
-
-
-            
-
-def trainNetwork(pgAlgo, epochs, iterations):
+def trainNetwork(pgAlgo, epochs, iterations, Arm):
     for i in range(epochs):
-        with tf.GradientTape() as tape:
-            for j in range(iterations):
-                prevAction = pgAlgo.getPrevAction()
-                newState = pgAlgo.network(tf.convert_to_tensor(prevAction))
+        for j in range(iterations):
+            prevAction = pgAlgo.getPrevAction()
+            with tf.GradientTape() as tape:
+                newState = pgAlgo.network.call(prevAction)
+                newAction, logPdf = pgAlgo.getNextAction(newState)
 
-                newAction = pgAlgo.getNextAction(newState)
                 newReward = pgAlgo.getNextReward(newAction)
 
-                pgAlgo.storeTransition(newState, newAction, newReward)
 
-            pgAlgo.computeDiscountedReward()
-            stateHistory = pgAlgo.getStateHistory()
-            actionHistory = pgAlgo.getActionHistory()
-            discountedRewardsHistory = pgAlgo.getDiscountedRewardHistory().numpy()
+                pgAlgo.storeTransition(newState=newState, newAction=newAction, newReward=newReward)
+                policy_val = pgAlgo.computePolicy(newReward, logPdf)
 
-            print("discounted reward history", discountedRewardsHistory)
-
-            for k in range(len(stateHistory)):
-                state = stateHistory[k]
-                action = actionHistory[k]
-                discountedRewardsHistory = discountedRewardsHistory[k]
-                policy_val = pgAlgo.computePolicy(state, action, discountedRewardsHistory)
                 grads = tape.gradient(policy_val, pgAlgo.network.trainable_variables)
-                adam = Adam(learning_rate=pgAlgo.learning_rate)
-                adam.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
 
-        tape.reset()
+                pprint("Gradients  =")
+                pprint(grads)
+                gradDesc = tf.keras.optimizers.SGD(learning_rate=pgAlgo.learning_rate)
+                gradDesc.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
+
         pgAlgo.resetExperiment()
 
+
+def testNetwork(pgAlgo, steps, arm):
+    s = tuple(pgAlgo.robot_environment.start)
+    g = tuple(pgAlgo.robot_environment.goal)
+
+    route = [s]
+    roadmap = {s:None}
+
+    for i in range(steps):
+        prevPosition = route[-1]
+        nextPosition = pgAlgo.network(prevPosition)
+        route.append(nextPosition)
+        roadmap[nextPosition] = prevPosition
+
+        goalPotentialFunctionValue, isCloseToGoal = pgAlgo.closeToGoal(newAction=nextPosition[0], threshold=0.1)
+
+        if isCloseToGoal:
+            break
+
+    animate(arm, roadmap, route, pgAlgo.robot_environment.start, pgAlgo.robot_environment.obstacles)
+
+
 def main():
-    ARM = NLinkArm(LINK_LENGTH, [0,0])
-    #visualize_spaces(ARM, START, OBSTACLES)
+    arm = NLinkArm(LINK_LENGTH, [0,0])
+    robot_environment = robotEnv(obstacles=tf.reshape(tf.convert_to_tensor(()), (0, 3)),
+                                      start=tf.constant([1, 0]),
+                                      goal=tf.constant([0.0, 4.0]),
+                                      link_length=tf.constant([2, 2]))
+    visualize_spaces(arm, [1, 0] , [[-4,-4,0.3]])
 
-    pgAlgo = policyGradientAlgorithm()
+    pgAlgo = policyGradientAlgorithm(robot_environment=robot_environment,robot_arm=arm)
+    pgAlgo.constructNN()
 
+    trainNetwork(pgAlgo, epochs=1, iterations=3, Arm=arm)
 
-    trainNetwork(pgAlgo, epochs=10, iterations=10)
-
-
-    #pgAlgo.print()
-    '''roadmap = {(1.0,0.0):None,
-               (0.83, 0.29):(1.0,0.0),
-               (0.62, 0.53):(0.83, 0.29),
-               (1.0,0.5):(1.33,0.52)}'''
-
-    #route = [(1.0,0.0),(0.83,0.29),(0.62,0.53),(1.33,0.53),(1.0,0.5)]
-
-    #animate(ARM, roadmap, route, START, OBSTACLES)
 
 if __name__ == "__main__":
     main()

@@ -1,6 +1,6 @@
-OBSTACLES = [[3, 2, 1], 
-             [-2, 2, 1], 
-             [0, -2, 1]] 
-START = [1.0, 0.0]    
-GOAL = [2.0, 1]    
-LINK_LENGTH = [2, 2] 
+import tensorflow as tf
+
+OBSTACLES = tf.reshape(tf.convert_to_tensor(()), (0, 3))
+START = tf.constant([1 ,0])
+GOAL = tf.constant([2.16, 3.36])
+LINK_LENGTH = tf.constant([2, 2])
