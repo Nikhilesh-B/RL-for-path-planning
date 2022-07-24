@@ -39,7 +39,7 @@ input = tf.constant([[1, 2]])
 
 
 with tf.GradientTape() as tape:
-    #here we have to calculate the gradient of the logPdfValue with respect to the trainable variables.
+    #isn't the issue to do with the fact that the logPdfVal has nothing to do with the network trainable variables
     newState = network.call(input)
     print("New state=", newState)
     nextAction, pdfUnworkable = getNextAction(newState)
@@ -49,6 +49,8 @@ with tf.GradientTape() as tape:
     grads = tape.gradient(logPdfVal, network.trainable_variables)
     print("Grads=",grads)
     print("1st gradient=",grads[0][0][0])
+
+    tf.debugging.assert_near(x=tf.constant(0.0),y=tf.cast(grads[0][0][0],tf.float64),message="THE GRADIENTS ARE NOT EXCATLY ZERO THEY ARE JUST VERY SMALL")
     gradDesc = tf.keras.optimizers.SGD(learning_rate=0.1)
     gradDesc.apply_gradients(zip(grads,network.trainable_variables))
 

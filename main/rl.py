@@ -11,9 +11,10 @@ import tensorflow as tf
 
 
 class policyGradientAlgorithm():
-    def __init__(self, robot_environment, robot_arm, learning_rate=0.001, horizon=4, inputLayer_dims=2, fc1_dims=1, output_dims=2):
+    def __init__(self, robot_environment, robot_arm, learning_rate=0.001, horizon=4, inputLayer_dims=2, fc1_dims=1,fc2_dims=1, output_dims=2):
         self.horizon = horizon
         self.fc1_dims = fc1_dims
+        self.fc2_dims = fc2_dims
         self.inputLayer_dims = inputLayer_dims
         self.output_dims = output_dims
         self.learning_rate = learning_rate
@@ -103,7 +104,6 @@ class policyGradientAlgorithm():
         pdf = tf.math.pow(tf.linalg.det(2 * pi * sigma), -1 / 2) * tf.math.exp(
             -1 / 2 * tf.linalg.matmul(tf.linalg.matmul(mean - sampleVal, tf.linalg.inv(sigma)),
                                       tf.transpose(mean - sampleVal)))
-        print("pdf=", pdf)
         logPdf = tf.math.log(pdf)
 
         return logPdf
@@ -121,33 +121,15 @@ def trainNetwork(pgAlgo, epochs, iterations, Arm):
                 newState = pgAlgo.network.call(prevAction)
                 newAction, logPdf = pgAlgo.getNextAction(newState)
 
-                print("Here are the values of the weights in the network")
-                pprint(pgAlgo.network.get_weights())
-
-                pprint("Hey here's the new state=")
-                pprint(newState)
-
-                pprint("Hey here's the new action=")
-                pprint(newAction)
-
                 newReward = pgAlgo.getNextReward(newAction)
 
-                pprint("Here's the associated reward=")
-                pprint(newReward)
+
                 pgAlgo.storeTransition(newState=newState, newAction=newAction, newReward=newReward)
                 policy_val = pgAlgo.computePolicy(newReward, logPdf)
-                pprint("Here's the new policy value=")
-                pprint(policy_val)
-                #the gradients somehow all evaluate to zero so what's the issue here
+
                 grads = tape.gradient(policy_val, pgAlgo.network.trainable_variables)
-                #here we have the grads that we can manipulate and work with directly.
 
-
-                grads = newReward*tape.gradient(policy_val)
-                
-                
-
-                pprint("Gradients=")
+                pprint("Gradients  =")
                 pprint(grads)
                 gradDesc = tf.keras.optimizers.SGD(learning_rate=pgAlgo.learning_rate)
                 gradDesc.apply_gradients(zip(grads, pgAlgo.network.trainable_variables))
@@ -188,7 +170,6 @@ def main():
     pgAlgo.constructNN()
 
     trainNetwork(pgAlgo, epochs=1, iterations=3, Arm=arm)
-    pgAlgo.print()
 
 
 if __name__ == "__main__":
