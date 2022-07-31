@@ -44,4 +44,33 @@ The unshaded area represents all the points at which the arm would represents po
 
 <h3>Deep Neural Networks:</h3>
 
-Deep neural networks. I’m going to keep this very high level. A deep neural network is a function approximator that uses multiple levels of neurons to simulate a mathematical function. A neural network will be used as the mathematical tool for us to implement our algorithm. 
+Deep neural networks. I’m going to keep this very high level. A deep neural network is a function approximator that uses multiple levels of neurons to simulate a mathematical function. A neural network will be used as the mathematical tool for us to implement our algorithm.The algorithm uses forward propogation to calculate predictions and learns through taking complex gradients and propogating them backwards through the network.
+
+<h4>An example of a neural network</h4>
+<img src="images/nn.jpg" width=400 height=auto>
+
+
+<h3>Discrete Reinforcement Learning</h4> 
+Discrete reinforcement learning invovles taking a representation of the state at a point in time as the input. The algorithm then accordingly computes the probabilities for the best move as a result. The next move that is taken is the move that returns the highest probability. Some type of reward/value is associated with each move and is fed back to the original nerual network. This is back propogated through the network and the weights are updated. 
+
+<h4>Discrete reinforcement learning neural network</h4> 
+<img src="images/deep_rl.jpg" width=400 height=auto>  
+
+ 
+
+<h3>Continous reinforcement learning</h3> 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
