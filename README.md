@@ -32,7 +32,7 @@ To understand the concept of deep reinforcement learning one must first understa
 A robotic configuration space plots the different positions of actuators that are possible in an environment with obstacles. For instance, consider the following robotic arm and the following configuration space.  
 
 Robotic arm: 
-![Robotic arm that is originally at point A. The goal state is point B. It's first joint angle is alpha, and its second joint angle is beta](images/robotic_arm_diagram.png|width=200,height=auto)
+![Robotic arm that is originally at point A. The goal state is point B. It's first joint angle is alpha, and its second joint angle is beta](images/robotic_arm_diagram.png|width=200)
 
   
 
