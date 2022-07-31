@@ -31,22 +31,17 @@ To understand the concept of deep reinforcement learning one must first understa
 
 A robotic configuration space plots the different positions of actuators that are possible in an environment with obstacles. For instance, consider the following robotic arm and the following configuration space.  
 
-Robotic arm: 
+<h4>Robotic arm:</h4> 
 <img src="images/robotic_arm_diagram.png" width=400 height=auto> 
-![Robotic arm that is originally at point A. The goal state is point B. It's first joint angle is alpha, and its second joint angle is beta|40%](images/robotic_arm_diagram.png|width=200)
 
-  
-
-Configuration space: 
-![C space of the above robotic arm. The shaded parts of the diagram are values for which the robot will crash into an obstacle. The unshaded parts are areas for which the robot moves freely.](images/c_space_diagram.png)
- 
+<h4>Configuration space:</h4> 
+<img src="images/c_space_diagram.png" width=400 height=auto>
 
 The shaded area above represents points at which the arm, with that particular alpha and beta values, would crash into the obstacle 
 
 The unshaded area represents all the points at which the arm would represents points at which the robot, with that particular alpha and particular alpha and beta values, would not be crashing into the obstacle. 
 
- 
 
-Deep Neural Networks: 
+<h3>Deep Neural Networks:</h3>
 
 Deep neural networks. I’m going to keep this very high level. A deep neural network is a function approximator that uses multiple levels of neurons to simulate a mathematical function. A neural network will be used as the mathematical tool for us to implement our algorithm. 
