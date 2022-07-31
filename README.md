@@ -54,23 +54,9 @@ Deep neural networks. I’m going to keep this very high level. A deep neural ne
 Discrete reinforcement learning invovles taking a representation of the state at a point in time as the input. The algorithm then accordingly computes the probabilities for the best move as a result. The next move that is taken is the move that returns the highest probability. Some type of reward/value is associated with each move and is fed back to the original nerual network. This is back propogated through the network and the weights are updated. 
 
 <h4>Discrete reinforcement learning neural network</h4> 
-<img src="images/deep_rl.jpg" width=400 height=auto>  
-
- 
+<img src="images/deep_rl.png" width=400 height=auto> 
 
 <h3>Continous reinforcement learning</h3> 
+The same above strategy is applied but instead of learning discrete probabilities and taking an argmax, the algorithm learns an optimal normla distriution with a mean and a variance. This provides the flexibility needed for a continuous setting like a robot.
 
 
-
-
-
-
-
-
-
-
-
-
-
-
- 
