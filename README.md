@@ -35,12 +35,12 @@ The Basics of Robotic Configuration Spaces:
 A robotic configuration space plots the different positions of actuators that are possible in an environment with obstacles. For instance, consider the following robotic arm and the following configuration space.  
 
 Robotic arm: 
-![Robotic arm that is originally at point A. The goal state is point B. It's first joint angle is alpha, and its second joint angle is beta]{./images/robotic_arm_diagram.png}
+![Robotic arm that is originally at point A. The goal state is point B. It's first joint angle is alpha, and its second joint angle is beta]{images/robotic_arm_diagram.png}
 
   
 
 Configuration space: 
-![C space of the above robotic arm. The shaded parts of the diagram are values for which the robot will crash into an obstacle. The unshaded parts are areas for which the robot moves freely.]
+![C space of the above robotic arm. The shaded parts of the diagram are values for which the robot will crash into an obstacle. The unshaded parts are areas for which the robot moves freely.]{images/c_space_diagram.png}
  
 
 The shaded area above represents points at which the arm, with that particular alpha and beta values, would crash into the obstacle 
