@@ -6,7 +6,7 @@ This repository demonstrates continuous action reinforcement learning in the spe
 
  
 
-Abstract Motivation: 
+<h3>Abstract Motivation:</h3> 
 
 The vast majority of robotic arms used in real-world applications today are hard-coded to follow a certain trajectory when doing a specific task. In dynamic situations in which obstacles may come in the way of a specific trajectory or a specific target of the arm moves positions, such arms will fail to perform adequately. 
 
@@ -16,21 +16,18 @@ In response this repository demonstrates the potential for deep reinforcement le
 
  
 
-Continuous Action Deep Reinforcement Learning as applied to Robotic arms: 
+<h3>Continuous Action Deep Reinforcement Learning as applied to Robotic arms:</h3> 
 
 To understand the concept of deep reinforcement learning one must first understand: 
+<ol>
+	<li>Robotics configuration spaces</li>
+   	<li>Deep neural networks</li>  
+	<li>Discrete reinforcement learning</li>  
+	<li>Continuous action reinforcement learning</li>
+</ol>  
 
-Robotics configuration spaces  
 
-Deep neural networks  
-
-Discrete reinforcement learning  
-
-Continuous action reinforcement learning  
-
- 
-
-The Basics of Robotic Configuration Spaces: 
+<h3>The Basics of Robotic Configuration Spaces:</h3> 
 
 A robotic configuration space plots the different positions of actuators that are possible in an environment with obstacles. For instance, consider the following robotic arm and the following configuration space.  
 
