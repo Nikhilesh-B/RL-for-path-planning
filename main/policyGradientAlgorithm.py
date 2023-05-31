@@ -8,8 +8,10 @@ tfd = distributions
 
 
 class policyGradientAlgorithm():
+    # Initializing the class and its variables.
     def __init__(self, learning_rate=0.001, gamma=0.003, horizon=4, inputLayer_dims=2, fc1_dims=1, fc2_dims=10,
                  output_dims=2):
+        # Define instance variables related to rewards, actions, state history, and the network.
         self.discountedRewardHistory = None
         self.reward_history = None
         self.action_history = None
@@ -27,7 +29,9 @@ class policyGradientAlgorithm():
         self.output_dims = output_dims
         self.learning_rate = learning_rate
 
+    # Constructs the neural network using Keras' Sequential API
     def constructNN(self):
+        # Define the structure of the network with input layer, two dense layers and an output layer
         self.inputLayer = InputLayer(input_shape=(self.inputLayer_dims,))
         self.fc1 = Dense(self.fc1_dims, activation='relu')
         self.fc2 = Dense(self.fc2_dims, activation='relu')
@@ -39,14 +43,17 @@ class policyGradientAlgorithm():
             self.output
         ])
 
+        # Initialize history variables for states, actions and rewards
         self.state_history = [START]
         self.action_history = [START]
         self.reward_history = [0]
         self.discountedRewardHistory = None
 
+    # Gets the last action taken
     def getPrevAction(self):
         return [self.action_history[-1]]
 
+    # Computes the next action using multivariate normal distribution.
     @staticmethod
     def getNextAction(newState):
         mu = newState[0]
@@ -55,14 +62,8 @@ class policyGradientAlgorithm():
         nextAction, logPdf = actionDist.experimental_sample_and_log_prob()
         return nextAction, logPdf
 
+    # Checks if a robot arm configuration would result in a collision with an obstacle.
     def detect_collision(self, arm, config, obstacles):
-        """
-        :param obstacles: circular obstacles list of lists
-        :param arm: NLinkArm object
-        :param config: Configuration (joint angles) of the arm
-        :return: True if any part of arm collides with obstacles, False otherwise
-        """
-        # here we have all this numpy associated stuff that may need to be converted to TF
         arm.update_joints(config)
         points = arm.points
         for k in range(len(points) - 1):
@@ -89,6 +90,7 @@ class policyGradientAlgorithm():
 
         return False
 
+    # Checks if the end effector of the arm is close to the goal.
     @staticmethod
     def closeToGoal(newAction, Arm, threshold):
         theta0 = newAction[0][0]
@@ -103,8 +105,6 @@ class policyGradientAlgorithm():
         endEffectorPosition = tf.concat([x_joint2, y_joint2], axis=0)
 
         g = tf.constant(GOAL)
-        # not continuous and differentiable
-        # goalPotentialFunction = 10000/(1+tf.norm(endEffectorPosition-g))
         goalFunction = tfd.MultivariateNormalFullCovariance(loc=endEffectorPosition, covariance_matrix=[[1, 0], [0, 1]])
         goalPotentialFunctionValue = 1000 * goalFunction.prob(newAction)
 
@@ -112,6 +112,7 @@ class policyGradientAlgorithm():
 
         return goalPotentialFunctionValue, isCloseToGoal
 
+    # Computes the reward for a given action.
     def getNextReward(self, newAction, Arm):
         reward = 0
 
@@ -124,16 +125,19 @@ class policyGradientAlgorithm():
         reward = tf.constant(reward)
         return reward
 
+    # Resets the experiment and clears the history of states, actions, and rewards.
     def resetExperiment(self):
         self.state_history = [START]
         self.action_history = [START]
         self.reward_history = [0]
 
+    # Stores a new transition in the history.
     def storeTransition(self, newState, newAction, newReward):
         self.state_history.append(newState)
         self.action_history.append(newAction)
         self.reward_history.append(newReward)
 
+    # Getter methods for history of states, actions and discounted rewards.
     def getStateHistory(self):
         return self.state_history
 
@@ -143,11 +147,13 @@ class policyGradientAlgorithm():
     def getDiscountedRewardHistory(self):
         return self.discountedRewardHistory
 
+    # Prints the summary of the neural network.
     def print(self):
         print(" XXXXXXXXXXXXXXX ")
         self.network.summary()
         print(" XXXXXXXXXXXXXXX ")
 
+    # Calculates the discounted reward for each state in the history.
     def computeDiscountedReward(self):
         self.discountedRewardHistory = [0] * len(self.state_history)
         for k in range(0, len(self.reward_history)):
@@ -161,6 +167,7 @@ class policyGradientAlgorithm():
 
         return self.discountedRewardHistory
 
+    # Computes the policy for a given reward and log probability of an action.
     @staticmethod
     def computePolicy(reward, logPdf):
         return reward * logPdf
