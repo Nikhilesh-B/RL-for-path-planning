@@ -57,6 +57,5 @@ Discrete reinforcement learning invovles taking a representation of the state at
 <img src="images/deep_rl.png" width=400 height=auto> 
 
 <h3>Continous reinforcement learning</h3> 
-The same above strategy is applied but instead of learning discrete probabilities and taking an argmax, the algorithm learns an optimal normla distriution with a mean and a variance. This provides the flexibility needed for a continuous setting like a robot.
-
+The same above strategy is applied but instead of learning discrete probabilities and taking an argmax, the algorithm learns an optimal normal distriution with a mean and a variance. This provides the flexibility needed for a continuous setting like a robot.
 
